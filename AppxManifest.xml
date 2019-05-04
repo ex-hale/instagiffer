@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<Package xmlns="http://schemas.microsoft.com/appx/2010/manifest">
+  <Identity Name="ExhaleSoftwareInc.Gif.Instagiffer" 
+            Version="1.66.0.0"
+            ProcessorArchitecture="neutral"
+            ResourceId="en-us"
+            Publisher="CN=Exhale Software Inc, O=Exhale Software Inc, L=Coquitlam, S=BC, C=Canada" />
+  <Properties>
+    <DisplayName>Instagiffer</DisplayName>
+    <Description>Create beautiful GIFs easily</Description>
+    <PublisherDisplayName>Exhale Software Inc.</PublisherDisplayName>
+    <Logo>doc\graphics\logo.png</Logo>
+  </Properties>
+  <Prerequisites>
+    <OSMinVersion>5.1.2600</OSMinVersion>
+    <OSMaxVersionTested>10.0.10240</OSMaxVersionTested>
+  </Prerequisites>
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+</Package>
