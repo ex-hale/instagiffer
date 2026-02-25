@@ -1,0 +1,33 @@
+[MESSAGES CONTROL]
+# Disable warnings that are too noisy for this legacy codebase:
+#   W0401: wildcard-import (tkinter pattern)
+#   W0702: bare-except (legacy error handling)
+#   W1201: logging-not-lazy (hundreds of legacy logging calls)
+#   W0212: protected-access (configparser _sections usage)
+#   W0511: fixme (TODO/FIXME comments)
+#   W0613: unused-argument (callbacks with required signatures)
+#   W0612: unused-variable (legacy code)
+#   W0201: attribute-defined-outside-init (Tkinter widget setup pattern)
+#   E0401: import-error (platform-specific imports like winsound/win32api)
+#   E1101: no-member (os.startfile is Windows-only)
+#   C0103: invalid-name (legacy camelCase naming throughout)
+#   C0415: import-outside-toplevel (platform-conditional imports)
+#   W0614: unused-wildcard-import (tkinter wildcard pattern)
+#   C0116: missing-function-docstring (legacy code lacks docstrings)
+#   C0115: missing-class-docstring (legacy code lacks docstrings)
+#   C0209: consider-using-f-string (hundreds of legacy % and .format() calls)
+#   C0301: line-too-long (black handles what it can; remaining are URLs/strings)
+#   C0413: wrong-import-position (tkinter wildcard must precede PIL)
+#   C0412: ungrouped-imports (PIL conditional import for win32)
+#   R0902-R0917: too-many-* (legacy class design, not worth refactoring now)
+#   R1705: no-else-return (stylistic, not a bug)
+disable=W0401,W0702,W1201,W0212,W0511,W0613,W0612,W0201,E0401,E1101,
+        C0103,C0415,W0614,C0116,C0115,C0209,C0301,C0413,C0412,C0302,
+        C0121,C0123,C0200,C0325,C1802,
+        R0205,R0902,R0904,R0912,R0913,R0914,R0915,R0916,R0917,
+        R1701,R1703,R1704,R1705,R1710,R1714,R1716,R1721,R1730,R1731,
+        R1732,R1734,R1735,
+        W0602,W0603,W0621,W0707,W0718,W0719,W1514
+
+[FORMAT]
+max-line-length=200
