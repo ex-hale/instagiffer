@@ -22,3 +22,6 @@ instagiffer-event.log
 
 # pytest
 .pytest_cache/
+
+# Test artifacts (downloaded via make test-video)
+test_data/

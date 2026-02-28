@@ -6,7 +6,7 @@ VERSION := $(shell perl -ne 'print "$$1" if /INSTAGIFFER_VERSION\s*=\s*"([0-9.]+
 PRERELEASE := $(shell perl -ne 'print "$$1" if /INSTAGIFFER_PRERELEASE\s*=\s*"([^"]*)"/' instagiffer.py)
 MAC_APP_PATH := dist/Instagiffer.app
 
-.PHONY: setup test lint format run clean \
+.PHONY: setup test test-videos lint format run clean \
         mac_deps \
         mac_app mac_dmg mac_pkg mac_release \
         win_exe win_installer win_portable win_release
@@ -22,7 +22,19 @@ $(VENV)/bin/activate: requirements.txt
 	$(PIP) install -r requirements.txt
 	@echo "\nDone. Activate with: source $(VENV)/bin/activate"
 
-test: setup
+# Short Creative Commons videos for integration tests
+TEST_VIDEO_URLS := https://www.youtube.com/watch?v=aqz-KE-bpKQ https://www.youtube.com/watch?v=L_uXZEkhlZU
+test-videos:
+	@mkdir -p test_data
+	@i=1; for url in $(TEST_VIDEO_URLS); do \
+		if [ ! -f "test_data/test_video_$$i.mp4" ]; then \
+			yt-dlp -f "worst[ext=mp4]/worst" -o "test_data/test_video_$$i.mp4" "$$url"; \
+		fi; \
+		i=$$((i + 1)); \
+	done
+
+test: setup test-videos
+	@rm -f test_data/*.gif
 	$(PYTHON) -m pytest test_instagiffer.py -v --tb=short
 
 lint: setup
@@ -35,37 +47,19 @@ run: setup
 	$(PYTHON) main.py
 
 # ---------------------------------------------------------------------------
-# macOS dependency downloads (skip if already present)
+# macOS dependencies
 # ---------------------------------------------------------------------------
 
 mac_deps:
+	@command -v brew >/dev/null || (echo "Error: Homebrew is required. Install from https://brew.sh" && exit 1)
+	@brew install imagemagick-full gifsicle
+
+	# TODO build imagemagick from source (static linked)
+
 	@mkdir -p deps/mac
-	@if [ -f deps/mac/ffmpeg ]; then \
-		echo "ffmpeg already exists, skipping"; \
-	else \
-		echo "Downloading ffmpeg..."; \
-		curl -L -o deps/mac/ffmpeg.zip "https://evermeet.cx/ffmpeg/getrelease/zip"; \
-		unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip; \
-		chmod +x deps/mac/ffmpeg; \
-	fi
-	@if [ -f deps/mac/yt-dlp ]; then \
-		echo "yt-dlp already exists, skipping"; \
-	else \
-		echo "Downloading yt-dlp..."; \
-		curl -L -o deps/mac/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos"; \
-		chmod +x deps/mac/yt-dlp; \
-	fi
-	@if [ -f deps/mac/gifsicle ]; then \
-		echo "gifsicle already exists, skipping"; \
-	else \
-		if command -v gifsicle >/dev/null 2>&1; then \
-			echo "Copying gifsicle from Homebrew..."; \
-			cp "$$(which gifsicle)" deps/mac/gifsicle; \
-			chmod +x deps/mac/gifsicle; \
-		else \
-			echo "WARNING: gifsicle not found. Install with: brew install gifsicle"; \
-		fi; \
-	fi
+	@[ -f deps/mac/ffmpeg ]   || (curl -L -o deps/mac/ffmpeg.zip "https://evermeet.cx/ffmpeg/getrelease/zip" && unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip && chmod +x deps/mac/ffmpeg)
+	@[ -f deps/mac/yt-dlp ]   || (curl -L -o deps/mac/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos" && chmod +x deps/mac/yt-dlp)
+	@[ -f deps/mac/gifsicle ] || cp "$$(which gifsicle)" deps/mac/gifsicle
 	@echo "macOS dependencies ready in deps/mac/"
 
 # ---------------------------------------------------------------------------
@@ -131,3 +125,4 @@ win_release: win_installer win_portable
 clean:
 	rm -rf $(VENV) __pycache__ .pytest_cache instagiffer-event.log
 	rm -rf dist/ build/ *.pyc *.dmg *.pkg
+	rm -rf test_data/

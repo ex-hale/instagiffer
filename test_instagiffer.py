@@ -15,7 +15,18 @@ import time
 import os
 import pytest  # pylint: disable=import-error
 
-requires_macos = pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only (AppleScript)")
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+TEST_DIR = os.path.join(PROJECT_DIR, "test_data")
+TEST_VIDEOS = sorted(os.path.join(TEST_DIR, f) for f in os.listdir(TEST_DIR)) if os.path.isdir(TEST_DIR) else []
+
+requires_macos = pytest.mark.skipif(
+    sys.platform != "darwin",
+    reason="macOS-only (AppleScript)",
+)
+requires_test_video = pytest.mark.skipif(
+    not os.path.isdir(TEST_DIR) or not os.listdir(TEST_DIR),
+    reason="No test videos found — run: make test-video",
+)
 
 # ---------------------------------------------------------------------------
 # AppleScript helpers
@@ -99,8 +110,6 @@ def get_window_size(title=APP_TITLE):
         """)
     w, h = out.split(",")
     return int(w), int(h)
-
-
 
 
 def close_all_dialogs():
@@ -240,3 +249,30 @@ def test_05_mac_close_app(app):
         app.wait(timeout=2)
 
     assert app.poll() is not None, "App process should have exited"
+
+
+@requires_test_video
+@pytest.mark.parametrize("video", TEST_VIDEOS, ids=lambda p: os.path.basename(p))
+def test_cli_creates_gif(video):
+    """CLI batch mode produces a valid GIF file from a local video."""
+    name = os.path.splitext(os.path.basename(video))[0]
+    output_gif = os.path.join(TEST_DIR, f"test_cli_creates_gif_{name}.gif")
+
+    result = subprocess.run(
+        [sys.executable, "main.py", video, "-o", output_gif],
+        cwd=PROJECT_DIR,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, f"CLI exited with {result.returncode}\nstderr: {result.stderr}"
+    assert os.path.isfile(output_gif), f"GIF not created at {output_gif}"
+
+    size = os.path.getsize(output_gif)
+    assert size > 1000, f"GIF too small ({size} bytes), likely corrupt"
+
+    # Verify it starts with the GIF magic bytes
+    with open(output_gif, "rb") as f:
+        magic = f.read(6)
+    assert magic in (b"GIF87a", b"GIF89a"), f"Not a valid GIF file (magic: {magic!r})"

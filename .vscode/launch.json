@@ -9,7 +9,7 @@
             "python": "${workspaceFolder}/.venv/bin/python3",
             "cwd": "${workspaceFolder}",
             "console": "integratedTerminal",
-            "preLaunchTask": "Run Tests"
+            //"preLaunchTask": "Run Tests"
             // Uncomment for bundled app testing with standalone ImageMagick:
             // "env": {
             //     "MAGICK_HOME": "./deps/mac/im",

@@ -46,8 +46,8 @@ __imgurcid__ = "58fc34d08ab311d"
 __status__ = "Production"
 __version__ = INSTAGIFFER_VERSION + INSTAGIFFER_PRERELEASE
 __release__ = False  # If this is false, bindep output, and info-level statements will be displayed stdout
-__changelogUrl__ = "http://instagiffer.com/post/146636589471/instagiffer-175-macpc"
-__faqUrl__ = "http://www.instagiffer.com/post/51787746324/frequently-asked-questions"
+__changelogUrl__ = "https://github.com/ex-hale/instagiffer/releases"
+__faqUrl__ = "https://github.com/ex-hale/instagiffer#faq"
 
 import hashlib
 import base64
@@ -65,6 +65,7 @@ import time
 import logging
 import random
 import locale
+import argparse
 import shlex
 import traceback
 from random import randrange
@@ -443,16 +444,12 @@ def CreateWorkingDir(conf):
     if conf.ParamExists("paths", "workingDir"):
         tempDir = conf.GetParam("paths", "workingDir")
 
-    appDataRoot = ""
-
     # No temp dir configured
     if tempDir == None or tempDir == "":
         if ImAMac():
-            appDataRoot = expanduser("~") + "/Library/Application Support/"
-            tempDir = appDataRoot + "Instagiffer/"
+            tempDir = os.path.join(expanduser("~"), "Library", "Application Support", "Instagiffer")
         else:
-            appDataRoot = expanduser("~") + os.sep
-            tempDir = appDataRoot + ".instagiffer" + os.sep + "working"
+            tempDir = os.path.join(expanduser("~"), ".instagiffer", "working")
 
     # Pre-emptive detection and correction of language issues
     try:
@@ -634,9 +631,9 @@ class ImagemagickFont:
 
         self.fonts = dict()
         fonts = re.findall(
-            r"\s*Font: (.+?)\n\s*family: (.+?)\n\s*style: (.+?)\n\s*stretch: (.+?)\n\s*weight: (.+?)\n\s*glyphs: (.+?)\n",
+            r"\s*Font: (.+?)\n\s*family: (.+?)\n\s*style: (.+?)\n\s*stretch: (.+?)\n\s*weight: (.+?)\n(?:\s*\w+: .+?\n)*?\s*glyphs: (.+?)\n",
             imagemagickFontData,
-            re.DOTALL | re.M | re.UNICODE,
+            re.M | re.UNICODE,
         )
 
         for font in fonts:
@@ -656,7 +653,9 @@ class ImagemagickFont:
                 continue
 
             # ignore stretched fonts, and styles other than italic, and weights we don't know about
-            if fontFamily != "unknown" and fontStretch == "Normal" and (fontStyle == "Italic" or fontStyle == "Normal") and (fontWeight == "400" or fontWeight == "700"):
+            if fontFamily.startswith(".") or fontFamily == "unknown":
+                continue
+            if fontStretch == "Normal" and fontStyle in ("Italic", "Normal") and fontWeight in ("400", "700"):
 
                 overallStyle = None
                 if fontStyle == "Normal" and fontWeight == "400":
@@ -726,21 +725,21 @@ class AnimatedGif:
         self.gifOutPath = None  # Warning: Don't use this directly!
         self.lastSavedGifPath = None
         self.overwriteGif = True
-        self.frameDir = workDir + os.sep + "original"
-        self.resizeDir = workDir + os.sep + "resized"
-        self.processedDir = workDir + os.sep + "processed"
-        self.captureDir = workDir + os.sep + "capture"
-        self.maskDir = workDir + os.sep + "mask"
-        self.downloadDir = workDir + os.sep + "downloads"
-        self.previewFile = workDir + os.sep + "preview.gif"
-        self.vidThumbFile = workDir + os.sep + "thumb.png"
-        self.blankImgFile = workDir + os.sep + "blank.gif"
-        self.audioClipFile = workDir + os.sep + "audio.wav"
+        self.frameDir = os.path.join(workDir, "original")
+        self.resizeDir = os.path.join(workDir, "resized")
+        self.processedDir = os.path.join(workDir, "processed")
+        self.captureDir = os.path.join(workDir, "capture")
+        self.maskDir = os.path.join(workDir, "mask")
+        self.downloadDir = os.path.join(workDir, "downloads")
+        self.previewFile = os.path.join(workDir, "preview.gif")
+        self.vidThumbFile = os.path.join(workDir, "thumb.png")
+        self.blankImgFile = os.path.join(workDir, "blank.gif")
+        self.audioClipFile = os.path.join(workDir, "audio.wav")
 
         self.OverwriteOutputGif(self.conf.GetParamBool("settings", "overwriteGif"))
 
         if self.conf.GetParam("paths", "gifOutputPath").lower() == "default":
-            self.gifOutPath = self.GetDefaultOutputDir() + os.sep + "insta.gif"
+            self.gifOutPath = os.path.join(self.GetDefaultOutputDir(), "insta.gif")
         else:
             self.gifOutPath = self.conf.GetParam("paths", "gifOutputPath")
 
@@ -986,7 +985,7 @@ class AnimatedGif:
                     # PIL uses fromstring
                     PIL.Image.frombytes("RGB", imgDimensions, imgDataArray[x]).resize(
                         (int(width * resizeRatio), int(height * resizeRatio)),
-                        PIL.Image.ANTIALIAS,
+                        PIL.Image.LANCZOS,
                     ).save(capPath)
                     if os.path.exists(capPath):
                         frameCount += 1
@@ -1596,21 +1595,10 @@ class AnimatedGif:
             return 0
 
     def GetResizedImageList(self, idx=None):
-        ret = []
-        files = glob.glob(self.GetResizedImagesDir() + "*")
-        for f in files:
-            if idx is not None:
-                origFiles = self.GetExtractedImageList()
-                f = self.GetResizedImagesDir() + os.path.basename(origFiles[idx - 1])
-                return f
-                # doesn't handle deleted frames - DOESNT WORK
-                # imageName = "image%04d.png" % (idx)
-                # if imageName in f:
-                #     return f
-
-            ret.append(f)
-
-        return ret
+        if idx is not None:
+            origFiles = self.GetExtractedImageList()
+            return self.GetResizedImagesDir() + os.path.basename(origFiles[idx - 1])
+        return sorted(glob.glob(self.GetResizedImagesDir() + "*"))
 
     def ResizedImagesExist(self):
         count = 0
@@ -1661,11 +1649,7 @@ class AnimatedGif:
         return len(self.GetExtractedImageList())
 
     def GetExtractedImageList(self):
-        ret = []
-        files = glob.glob(self.GetExtractedImagesDir() + "*")
-        for f in files:
-            ret.append(f)
-        return ret
+        return sorted(glob.glob(self.GetExtractedImagesDir() + "*"))
 
     def DeleteExtractedImages(self):
         files = glob.glob(self.GetExtractedImagesDir() + "*")
@@ -1680,11 +1664,7 @@ class AnimatedGif:
         return self.processedDir + os.sep
 
     def GetProcessedImageList(self):
-        ret = []
-        files = glob.glob(self.GetProcessedImagesDir() + "*." + self.GetIntermediaryFrameFormat())
-        for f in files:
-            ret.append(f)
-        return ret
+        return sorted(glob.glob(self.GetProcessedImagesDir() + "*." + self.GetIntermediaryFrameFormat()))
 
     def DeleteProcessedImages(self):
         if os.path.exists(self.previewFile):
@@ -2595,7 +2575,7 @@ class AnimatedGif:
 
                 cmdProcImage += ' ( -clone 0 -fill "#222b6d" -colorize %d%% ) ( -clone 0 -colorspace gray -negate ) -compose blend -define compose:args=50,0  -composite ' % (amt)
                 cmdProcImage += ' ( -clone 0 -fill "#f7daae" -colorize %d%% ) ( -clone 0 -colorspace gray -negate ) -compose blend -define compose:args=120,1 -composite ' % (amt)
-                cmdProcImage += " -contrast -modulate 100,150,100 -auto-gamma "
+                cmdProcImage += " -level 3%,97% -modulate 100,150,100 -auto-gamma "
 
             # Sepia
             if self.conf.GetParamBool("effects", "sepiaTone"):
@@ -2706,6 +2686,12 @@ class AnimatedGif:
         # Process all frames
         if not skipProcessing:
             self.ImageProcessing()
+        else:
+            # Copy resized images to the processed directory so the
+            # GIF assembly step below can find them.
+            self.DeleteProcessedImages()
+            for f in sorted(glob.glob(self.resizeDir + os.sep + "*." + self.GetIntermediaryFrameFormat())):
+                shutil.copy2(f, self.processedDir)
 
         #
         # Now what file format are we dealing with?
@@ -2917,88 +2903,10 @@ class AnimatedGif:
         else:
             return int(round(float(self.videoFps)))
 
-    def CompatibilityWarningsEnabled(self):
-        return self.conf.GetParamBool("warnings", "socialMedia")
-
     def GetCroppedAndResizedDimensions(self):
         w, h = self.conf.GetParam("size", "resizePostCrop").split("x")
         return int(w), int(h)
 
-    def GetCompatibilityWarning(self):
-        w, h = self.GetCroppedAndResizedDimensions()
-        aspectRatio = w / float(h)
-
-        warnings = ""
-        warnTwitter = self.conf.GetParamBool("warnings", "twitter")
-        warnTumblr = self.conf.GetParamBool("warnings", "tumblr")
-        warnImgur = self.conf.GetParamBool("warnings", "imgur")
-        warnGPlus = self.conf.GetParamBool("warnings", "gplus")
-        warnFacebook = self.conf.GetParamBool("warnings", "facebook")
-        warnInstagram = self.conf.GetParamBool("warnings", "instagram")
-        warnVine = self.conf.GetParamBool("warnings", "vine")
-
-        if warnTumblr:
-            # TODO: Verify. is this still a thing?
-            # if w > 400 and w <= 500 and self.GetSize() >= 1000 * 1024 and self.GetSize() < 2000 * 1024:
-            #    warnings += "Tumblr Warning: If image width exceeds 400px, file size must be less than 1000kB\n\n"
-
-            if w > 540 or h > 750:
-                warnings += "Tumblr Warning: Image dimensions (" + str(w) + "x" + str(h) + ") are larger than the 500x750 maximum.\n\n"
-
-            if self.GetSize() >= 2000 * 1024:
-                warnings += (
-                    "Tumblr Warning: File size of "
-                    + str(int(self.GetSize() / 1024))
-                    + "kB is too large. It must be less than 2000kB. Try reducing animation smoothness, viewable region, frame size, or quality.  You can also try enabling black & white mode.\n\n"
-                )
-
-        if warnImgur and self.GetSize() >= 2 * 1024 * 1024:
-            warnings += (
-                "Imgur Warning: File size of "
-                + str(int(self.GetSize() / 1024))
-                + "kB is too large. It must be less than 2MB unless you have a premium account, in which case, the max upload limit is 5MB.\n\n"
-            )
-
-        if warnTwitter:
-            twitWarn = 0
-            if self.GetSize() >= 5 * 1024 * 1024:
-                warnings += "Twitter Warning: File size of " + str(int(self.GetSize() / 1024)) + "kB is too large. It must be less than 5MB.\n\n"
-                twitWarn += 1
-
-            if self.GetNumFrames() > 350:
-                warnings += "Twitter Warning: Number of frames must not exceed 350.\n\n"
-                twitWarn += 1
-
-            if twitWarn > 0:
-                # might as well tell them about this too
-                if w < 506 or aspectRatio != 1.0 or aspectRatio != 0.5:
-                    warnings += "Twitter Warning: recommended dimensions are 506x506 or 506x253.\n\n"
-
-        if warnGPlus and (w < 496 or h < 496 or aspectRatio != 1.0):
-            warnings += "Google Plus Warning: Recommended dimensions are 496x496.\n\n"
-
-        if warnInstagram:
-            if w != 600 or h != 600:
-                warnings += "Instagram Warning: Recommended dimensions are 600x600.\n\n"
-
-            if self.GetTotalRuntimeSec() > 15:
-                warnings += "Instagram Warning: Total runtime must not exceed 15 seconds.\n\n"
-
-        if warnFacebook:
-            if w != 504 or h != 283:
-                warnings += "Facebook Warning: Recommended dimensions are 504x283.\n\n"
-
-        if warnVine:
-            if w != 480 or h != 480:
-                warnings += "Vine Warning: Required dimensions are 480x480.\n\n"
-
-            if self.GetTotalRuntimeSec() > 6:
-                warnings += "Vine Warning: Total run time cannot exceed 6 seconds.\n\n"
-
-            if self.GetSize() >= 1500 * 1024:
-                warnings += "Vine Warning: Total file size must be under 1.5 MB\n\n"
-
-        return warnings
 
 
 class GifPlayerWidget(Label):
@@ -3046,7 +2954,7 @@ class GifPlayerWidget(Label):
             im = PIL.Image.open(f)
 
             if self.resizable and resize:
-                im = im.resize((self.winfo_width(), self.winfo_height()), PIL.Image.ANTIALIAS)
+                im = im.resize((self.winfo_width(), self.winfo_height()), PIL.Image.LANCZOS)
 
             self.images.append(im)
             self.frames.append(ImageTk.PhotoImage(im))
@@ -3167,6 +3075,13 @@ class GifApp:
 
         if ImAPC():
             self.parent.wm_iconbitmap("instagiffer.ico")
+        elif ImAMac():
+            try:
+                icon = PIL.ImageTk.PhotoImage(PIL.Image.open("instagiffer.icns"))
+                self.parent.wm_iconphoto(True, icon)
+                self._app_icon = icon  # prevent GC
+            except Exception:
+                pass
 
         frame = Frame(parent)
         frame.pack()
@@ -3291,7 +3206,6 @@ class GifApp:
             )
         #
 
-        self.socialMediaWarningsEnabled = StringVar()
         self.overwriteOutputGif = StringVar()
         self.fileSizeOptimize = StringVar()
 
@@ -3299,12 +3213,6 @@ class GifApp:
             label="Overwrite Output GIF",
             underline=0,
             variable=self.overwriteOutputGif,
-            command=self.OnChangeMenuSetting,
-        )
-        self.settingsMenu.add_checkbutton(
-            label="Social Media Warnings",
-            underline=0,
-            variable=self.socialMediaWarningsEnabled,
             command=self.OnChangeMenuSetting,
         )
         self.settingsMenu.add_cascade(label="Youtube Download Quality", underline=0, menu=self.qualityMenu)
@@ -3396,16 +3304,11 @@ class GifApp:
 
         # Bind context menu (cut & paste) action to video URL text field
 
-        if ImAMac():
-            whichRclickMouseButton = "<Button-2>"
-            whichRclickReleaseMouseButton = "<ButtonRelease-2>"
-        else:
-            whichRclickMouseButton = "<Button-3>"
-            whichRclickReleaseMouseButton = "<ButtonRelease-3>"
+        whichRclickMouseButton = "<Button-3>"
+        whichRclickReleaseMouseButton = "<ButtonRelease-3>"
 
         # right-click open  for multi-select mode
         self.btnFopen.bind(whichRclickMouseButton, self.OnShiftLoadVideo)
-
         self.txtFname.bind(whichRclickMouseButton, self.OnRClickPopup, add="")
 
         # Top-level left column, where all of the settings sliders are
@@ -3916,11 +3819,10 @@ class GifApp:
 
         self.ResetInputs()
 
-        # Show window
+        # Center then show window
         self.parent.update()
-        self.parent.deiconify()
-
         self.CenterWindow(self.parent)
+        self.parent.deiconify()
         self.EnableInputs(False, True)
 
         #
@@ -3932,11 +3834,8 @@ class GifApp:
         if self.conf.GetParamBool("settings", "overwriteGif"):
             self.settingsMenu.invoke(0)  # Argument refers to menu index
 
-        if self.conf.GetParamBool("warnings", "socialMedia"):
-            self.settingsMenu.invoke(1)
-
         if ImAPC() and self.conf.GetParamBool("size", "fileOptimizer"):
-            self.settingsMenu.invoke(4)
+            self.settingsMenu.invoke(3)
 
         # Load button gets focus
         self.btnFopen.focus()
@@ -4147,15 +4046,6 @@ class GifApp:
 
     # This is the UI handler for all checkbox menu items
     def OnChangeMenuSetting(self):
-
-        # Warning settings
-
-        if len(self.socialMediaWarningsEnabled.get()):
-            self.conf.SetParam(
-                "Warnings",
-                "socialMedia",
-                bool(int(self.socialMediaWarningsEnabled.get()) == 1),
-            )
 
         # Overwrite setting
 
@@ -4442,7 +4332,7 @@ class GifApp:
         #
         else:
             img = PIL.Image.open(imgPath)
-            img = img.resize((int(px2 - px) + 1, int(py2 - py) + 1), PIL.Image.ANTIALIAS)
+            img = img.resize((int(px2 - px) + 1, int(py2 - py) + 1), PIL.Image.LANCZOS)
 
         self.thumbnailPreview = PIL.ImageTk.PhotoImage(img)
         self.canCropTool.delete("thumbnail")
@@ -4825,28 +4715,23 @@ class GifApp:
         tkMessageBox.showinfo(title, message)
 
     def OnRClickPopup(self, event):
-        def RClickPaste(event):
-            if ImAMac():
-                pasteAction = "<<Paste>>"
-            else:
-                pasteAction = "<Control-v>"
-
-            event.widget.event_generate(pasteAction)
-
-        def RClickClear(event):
-            event.widget.delete(0, END)
-
-        event.widget.focus()
+        """Right-click context menu with cut/copy/paste/clear for Entry and Text widgets."""
+        w = event.widget
+        w.focus()
+        is_text = isinstance(w, Text)
+        clear_idx = "1.0" if is_text else 0
         popUp = Menu(None, tearoff=0, takefocus=0)
-        popUp.add_command(label="Paste", command=lambda event=event: RClickPaste(event))
-        popUp.add_command(label="Clear", command=lambda event=event: RClickClear(event))
+        popUp.add_command(label="Cut", command=lambda: w.event_generate("<<Cut>>"))
+        popUp.add_command(label="Copy", command=lambda: w.event_generate("<<Copy>>"))
+        popUp.add_command(label="Paste", command=lambda: w.event_generate("<<Paste>>"))
+        popUp.add_command(label="Clear", command=lambda: w.delete(clear_idx, END))
         popUp.tk_popup(event.x_root + 40, event.y_root + 10, entry="0")
 
     def About(self, event=None):
         global __version__
         self.Alert(
             "About Instagiffer",
-            "You are running Instagiffer " + __version__ + "!\nFollow us on Tumblr for updates, tips and tricks: www.instagiffer.com",
+            "You are running Instagiffer " + __version__ + "!\nhttps://github.com/ex-hale/instagiffer",
         )
 
     def ViewLog(self):
@@ -5079,7 +4964,7 @@ class GifApp:
         scaleFactor = cw / float(w)
         if h * scaleFactor > ch:
             scaleFactor = ch / float(h)
-        img = img.resize((int(scaleFactor * w) + 1, int(scaleFactor * h) + 1), PIL.Image.ANTIALIAS)
+        img = img.resize((int(scaleFactor * w) + 1, int(scaleFactor * h) + 1), PIL.Image.LANCZOS)
         w, h = img.size
 
         x = abs((w - cw) // 2) - 1
@@ -5405,12 +5290,6 @@ class GifApp:
                     "Processed %s frames not found" % (self.GetIntermediaryFrameFormat()),
                 )
             else:
-                if self.gif.GetCompatibilityWarning() and self.gif.CompatibilityWarningsEnabled():
-                    self.Alert(
-                        "Wait! This won't display properly on some social media sites!!",
-                        self.gif.GetCompatibilityWarning(),
-                    )
-
                 self.SetStatus("GIF saved. GIF size: " + str(self.gif.GetSize() / 1024) + "kB. Path: " + self.gif.GetLastGifOutputPath())
 
                 self.PlayGif(self.gif.GetProcessedImageList(), self.gif.GetGifFrameDelay())
@@ -5644,29 +5523,18 @@ class GifApp:
         # self.guiBusy = True
 
     def WaitForChildDialog(self, dlg, dlgGeometry=None):
+        # Position over parent window before showing
+        if dlgGeometry is not None and len(dlgGeometry) and dlgGeometry != "center":
+            dlg.geometry(dlgGeometry)
+        else:
+            x = self.mainFrame.winfo_rootx() + 50
+            y = self.mainFrame.winfo_rooty() + 50
+            dlg.geometry("+%d+%d" % (x, y))
+
         dlg.update()
         dlg.deiconify()
         dlg.lift()
         dlg.focus()
-
-        # Get current geometry
-        width = dlg.winfo_width()
-        height = dlg.winfo_height()
-        x = self.mainFrame.winfo_rootx()
-        y = self.mainFrame.winfo_rooty()
-        geom = "{0}x{1}+{2}+{3}".format(width, height, x, y)
-
-        if dlgGeometry == "center":
-            self.CenterWindow(dlg)
-            geom = dlg.geometry()
-
-        # Restore geometry
-        if dlgGeometry is not None and len(dlgGeometry) and dlgGeometry != "center":
-            geom = dlgGeometry
-
-        # Set window geometry
-        dlg.geometry(geom)
-        # Send mouse and key events to child window
         dlg.grab_set()
 
         # Block until window is destroyed
@@ -7193,7 +7061,7 @@ class GifApp:
                 int(self.gif.GetVideoWidth() * scaleFactor),
                 int(self.gif.GetVideoHeight() * scaleFactor),
             ),
-            PIL.Image.ANTIALIAS,
+            PIL.Image.LANCZOS,
         )
 
         photoImg = PIL.ImageTk.PhotoImage(img)
@@ -7743,6 +7611,7 @@ class GifApp:
 
         lblCaption = Label(captionDlg, text="Caption")
         txtCaption = Text(captionDlg, font=self.defaultFont, width=45, height=3)
+        txtCaption.bind("<Button-3>", self.OnRClickPopup)
         txtCaption.focus()
 
         fontSize = StringVar()
@@ -8306,61 +8175,46 @@ def tkErrorCatcher(self, *args):
 
 
 class InstaCommandLine:
-
-    description = "Instagiffer Command Line"
-    author = "Exhale Software Inc."
+    """CLI batch mode: python3 main.py video.mp4 [-o output.gif]"""
 
     def __init__(self):
-        if not self.ArgsArePresent():
+        if len(sys.argv) <= 1:
+            self.batchMode = False
             return
 
-        self.videoFileName = None
-        self.ParseArguments()
+        parser = argparse.ArgumentParser(
+            prog="instagiffer",
+            description="Instagiffer %s — GIF creator" % INSTAGIFFER_VERSION,
+        )
+        parser.add_argument("video", help="Path to local video file or URL")
+        parser.add_argument("-o", "--output", help="Output GIF path (default: ~/Desktop/insta.gif)")
+        args = parser.parse_args()
+        self.videoFileName = args.video
+        self.outputPath = args.output
+        self.batchMode = True
 
-    def ParseArguments(self):
-        # parser = argparse.ArgumentParser(prog="instagiffer",
-        #                                  description="You've discovered the Instagiffer %s command line. You're hardcore!" % (__version__),
-        #                                  epilog="Happy Giffing!")
-        # parser.add_argument('video', help='Path to local video file or Youtube link')
-        # self.args          = parser.parse_args()
+    def run(self):
+        binPath = os.path.dirname(os.path.realpath(sys.argv[0]))
+        conf = InstaConfig(binPath + os.sep + "instagiffer.conf")
+        if self.outputPath:
+            conf.SetParam("paths", "gifOutputPath", os.path.abspath(self.outputPath))
 
-        self.videoFileName = sys.argv[1]  # self.args.video
+        progress = lambda done, _=None: print(" [OK]") if done else sys.stdout.write(".")
+        gif = AnimatedGif(conf, self.videoFileName, CreateWorkingDir(conf), progress, None)
 
-    def ArgsArePresent(self):
-        return len(sys.argv) > 1
+        # GUI sets resizePostCrop to WxH via crop tool; in CLI, derive from video dims
+        resizeVal = conf.GetParam("size", "resizePostCrop")
+        if "x" not in str(resizeVal):
+            pct = max(1, int(resizeVal)) / 100.0
+            conf.SetParam("size", "resizePostCrop", "%dx%d" % (int(gif.GetVideoWidth() * pct), int(gif.GetVideoHeight() * pct)))
 
-    def GetVideoPath(self):
-        if self.videoFileName is not None:
-            logging.info("File specified on command line: " + self.videoFileName)
-            logging.info("File exists: %d" % (os.path.exists(self.videoFileName)))
-            return self.videoFileName
-        else:
-            return None
-
-    def BatchRun(self):
-        """Coming soon stuff"""
-        self.binPath = os.path.dirname(os.path.realpath(sys.argv[0]))
-        self.conf = InstaConfig(self.binPath + os.sep + "instagiffer.conf")
-        self.workDir = CreateWorkingDir(self.conf)
-        self.gif = AnimatedGif(self.conf, self.videoFileName, self.workDir, self.OnShowProgress, None)
-        self.MakeGif()
-        return 0
-
-    # Progress callback
-    def OnShowProgress(self, doneFlag, ignore=None):
-        if doneFlag:
-            print(" [OK]")
-        else:
-            sys.stdout.write(".")
-
-    # Makes a GIF according to current configuration
-    def MakeGif(self):
-        print("Extracting frames:")
-        self.gif.ExtractFrames()
-        print("Cropping and resizing:")
-        self.gif.CropAndResize()
+        for step, fn in [("Extracting frames", gif.ExtractFrames), ("Cropping and resizing", gif.CropAndResize)]:
+            print(step + ":")
+            fn()
         print("Generating GIF:")
-        self.gif.Generate()
+        gif.Generate(skipProcessing=True)
+        print("Output: " + gif.GetNextOutputPath())
+        return 0
 
 
 def main():
@@ -8371,8 +8225,8 @@ def main():
     exeDir = os.path.dirname(os.path.realpath(sys.argv[0]))
     os.chdir(exeDir)
 
-    # Set environment (when using bundled tools, set MAGICK_HOME etc. here)
-    # With Homebrew-installed tools, no special env vars are needed
+    # TODO: For release builds, build ImageMagick from source with
+    # --disable-modules --prefix=<bundle_path> to create a self-contained binary
 
     # File logging options
     try:
@@ -8407,38 +8261,26 @@ def main():
     #
 
     cmdline = InstaCommandLine()
-    cmdlineBatchMode = False
-    cmdlineVideoPath = None
-    if ImAPC() and cmdline.ArgsArePresent():
-        cmdlineVideoPath = cmdline.GetVideoPath()
 
-    # Command line mode or GUI?
+    if cmdline.batchMode:
+        sys.exit(cmdline.run())
 
-    if cmdlineBatchMode:
-        pass
-    else:
-        # Start the app.  Gather some diagnostic information about this machine to help with bug reporting
-        logging.info("Starting Instagiffer version " + __version__ + "...")
+    # GUI mode
+    logging.info("Starting Instagiffer version " + __version__ + "...")
 
-        Tk.report_callback_exception = tkErrorCatcher
+    Tk.report_callback_exception = tkErrorCatcher
 
-        import platform
+    import platform
 
-        if ImAPC():
-            logging.info("OS: " + platform.platform())
-        elif ImAMac():
-            logging.info("OSX Version: " + str(platform.mac_ver()))
-        else:
-            logging.info("Unknown OS")
+    logging.info("OS: %s %s (%s)", platform.system(), platform.release(), platform.machine())
+    logging.info("Python: %s.%s.%s", *sys.version_info[:3])
+    logging.info("Locale: %s, Encoding: %s", locale.getlocale()[0] or "C", locale.getpreferredencoding())
+    logging.info("App: %s, Home: %s", exeDir, expanduser("~"))
 
-        logging.info(sys.version_info)
-        logging.info("App: [" + exeDir + "]. Home: [" + expanduser("~") + "]")
-        logging.info("System Locale: " + str(locale.getlocale()) + "; Preferred encoding: " + locale.getpreferredencoding())
+    root = Tk()
+    app = GifApp(root, None)
 
-        root = Tk()
-        app = GifApp(root, cmdlineVideoPath)
-
-        root.mainloop()
+    root.mainloop()
 
 
 #
