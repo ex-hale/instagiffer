@@ -5,23 +5,10 @@ import os
 import sys
 from setuptools import setup
 
-#
-# Get version from environment
-#
-
-if "INSTAGIFFER_VERSION" in os.environ:
-    INSTAGIFFER_VERSION = os.environ["INSTAGIFFER_VERSION"]
-else:
-    sys.exit(1)
-if "INSTAGIFFER_PRERELEASE" in os.environ and "-pre" in os.environ["INSTAGIFFER_PRERELEASE"]:
-    INSTAGIFFER_PRERELEASE = os.environ["INSTAGIFFER_PRERELEASE"]
-    INSTAGIFFER_PRERELEASE = INSTAGIFFER_PRERELEASE.replace("-pre", ".")
-else:
-    INSTAGIFFER_PRERELEASE = ""
-
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from instagiffer import INSTAGIFFER_VERSION, INSTAGIFFER_PRERELEASE, __copyright__
 
 __author__ = "Exhale Software Inc."
-__copyright__ = "Copyright (c) 2013-2026, Exhale Software Inc."
 __version__ = INSTAGIFFER_VERSION + INSTAGIFFER_PRERELEASE
 
 APP = ["main.py"]

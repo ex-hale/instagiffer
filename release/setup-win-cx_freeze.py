@@ -1,27 +1,17 @@
 """Build Windows executable for Instagiffer using cx_Freeze. See Makefile win_* targets."""
 
+import os
+import sys
+from cx_Freeze import setup, Executable
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+from instagiffer import INSTAGIFFER_VERSION, INSTAGIFFER_PRERELEASE
+
 __author__ = "Justin Todd"
 __email__ = "instagiffer@gmail.com"
 __copyright__ = "Copyright 2013-2026, Exhale Software Inc."
 application_title = "Instagiffer"
 main_python_file = "instagiffer.py"
-
-import os
-import sys
-from cx_Freeze import setup, Executable
-
-#
-# Get version from environment
-#
-
-if "INSTAGIFFER_VERSION" in os.environ:
-    INSTAGIFFER_VERSION = os.environ["INSTAGIFFER_VERSION"]
-else:
-    sys.exit(1)
-
-if "INSTAGIFFER_PRERELEASE" in os.environ:
-    INSTAGIFFER_PRERELEASE = os.environ["INSTAGIFFER_PRERELEASE"]
-    INSTAGIFFER_VERSION += INSTAGIFFER_PRERELEASE.replace("pre-", ".")
 
 base = None
 

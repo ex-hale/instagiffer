@@ -4,19 +4,23 @@ PIP := $(VENV)/bin/pip
 
 VERSION := $(shell python3 -c "print(next(l.split('\"')[1] for l in open('instagiffer.py') if l.startswith('INSTAGIFFER_VERSION')))")
 PRERELEASE := $(shell python3 -c "print(next(l.split('\"')[1] for l in open('instagiffer.py') if l.startswith('INSTAGIFFER_PRERELEASE')))")
-MAC_APP_PATH := dist/Instagiffer.app
 
-# Output directory from ImageMagick sub-build
-IM_OUT := build/imagemagick/out
+TEST_VIDEO_URLS := https://www.youtube.com/watch?v=aqz-KE-bpKQ https://www.youtube.com/watch?v=L_uXZEkhlZU
+
+MAC_APP_PATH   := dist/Instagiffer.app
+MAC_MAGICK_OUT := build/imagemagick/out
+MAC_FFMPEG_URL := https://evermeet.cx/ffmpeg/getrelease/zip
+MAC_YTDLP_URL  := https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
 
 .PHONY: setup test test-videos lint format run clean \
-        mac_deps mac_deps_tools mac_deps_magick mac_deps_clean mac_deps_rebuild \
+        mac_deps mac_deps_clean \
         mac_app mac_dmg mac_pkg mac_release \
         win_exe win_installer win_portable win_release
 
-# ---------------------------------------------------------------------------
-# Development
-# ---------------------------------------------------------------------------
+clean:
+	rm -rf $(VENV) __pycache__ test/__pycache__ .pytest_cache *.egg-info instagiffer-event.log
+	rm -rf dist/ build/ deps/ *.pyc *.dmg *.pkg
+	rm -rf test/test_data/
 
 setup: $(VENV)/bin/activate mac_deps
 
@@ -25,8 +29,6 @@ $(VENV)/bin/activate: pyproject.toml
 	$(PIP) install -e ".[dev]"
 	@echo "\nDone. Activate with: source $(VENV)/bin/activate"
 
-# Short Creative Commons videos for integration tests
-TEST_VIDEO_URLS := https://www.youtube.com/watch?v=aqz-KE-bpKQ https://www.youtube.com/watch?v=L_uXZEkhlZU
 test-videos:
 	@mkdir -p test/test_data
 	@i=1; for url in $(TEST_VIDEO_URLS); do \
@@ -49,36 +51,26 @@ format: setup
 run: setup
 	$(PYTHON) main.py
 
-# ---------------------------------------------------------------------------
 # macOS dependencies
-# ---------------------------------------------------------------------------
 
-mac_deps_tools:
+mac_deps:
 	@command -v brew >/dev/null || (echo "Error: Homebrew required — https://brew.sh" && exit 1)
 	@for pkg in pkg-config cmake gperf gifsicle; do \
 		brew list $$pkg >/dev/null 2>&1 || brew install $$pkg; \
 	done
-
-mac_deps_magick:
 	$(MAKE) -f imagemagick.mk
 	@mkdir -p deps/mac
-	@cp -R $(IM_OUT)/* deps/mac/
-
-mac_deps: mac_deps_tools mac_deps_magick
-	@[ -f deps/mac/ffmpeg ]   || (curl -fSL -o deps/mac/ffmpeg.zip "https://evermeet.cx/ffmpeg/getrelease/zip" && unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip && chmod +x deps/mac/ffmpeg)
-	@[ -f deps/mac/yt-dlp ]   || (curl -fSL -o deps/mac/yt-dlp "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos" && chmod +x deps/mac/yt-dlp)
+	@cp -R $(MAC_MAGICK_OUT)/* deps/mac/
+	@[ -f deps/mac/ffmpeg ]   || (curl -fSL -o deps/mac/ffmpeg.zip "$(MAC_FFMPEG_URL)" && unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip && chmod +x deps/mac/ffmpeg)
+	@[ -f deps/mac/yt-dlp ]   || (curl -fSL -o deps/mac/yt-dlp "$(MAC_YTDLP_URL)" && chmod +x deps/mac/yt-dlp)
 	@[ -f deps/mac/gifsicle ] || cp "$$(which gifsicle)" deps/mac/gifsicle
 	@echo "macOS dependencies ready in deps/mac/"
 
 mac_deps_clean:
 	$(MAKE) -f imagemagick.mk clean
-	rm -rf deps/mac/magick deps/mac/etc
+	rm -rf deps/mac
 
-mac_deps_rebuild: mac_deps_clean mac_deps
-
-# ---------------------------------------------------------------------------
 # macOS release build (py2app)
-# ---------------------------------------------------------------------------
 
 mac_app: setup
 	$(PYTHON) -m compileall instagiffer.py
@@ -132,11 +124,4 @@ win_portable: win_installer
 win_release: win_installer win_portable
 	@echo "Built installer and portable zip for v$(VERSION)$(PRERELEASE)"
 
-# ---------------------------------------------------------------------------
-# Cleanup
-# ---------------------------------------------------------------------------
 
-clean:
-	rm -rf $(VENV) __pycache__ test/__pycache__ .pytest_cache *.egg-info instagiffer-event.log
-	rm -rf dist/ build/ deps/ *.pyc *.dmg *.pkg
-	rm -rf test/test_data/

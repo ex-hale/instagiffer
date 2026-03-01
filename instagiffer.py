@@ -778,12 +778,12 @@ class AnimatedGif:
         logging.info("Analyzing the media path to determine what kind of video this is...")
         self.isUrl = IsUrl(mediaLocator)
         captureRe = re.findall(
-            r"^::capture ([\.0-9]+) ([\.0-9]+) ([0-9]+)x([0-9]+)\+(\-?[0-9]+)\+(\-?[0-9]+) cursor=(\d+) retina=(\d+) web=(\d+)$",
+            r"^::capture ([\.0-9]+) ([\.0-9]+) ([0-9]+)x([0-9]+)\+(\-?[0-9]+)\+(\-?[0-9]+) cursor=(\d+) web=(\d+)$",
             mediaLocator,
         )
         isImgSeq = "|" in mediaLocator or IsPictureFile(mediaLocator)
 
-        if captureRe and len(captureRe[0]) == 9:
+        if captureRe and len(captureRe[0]) == 8:
             logging.info("Media locator indicates screen capture")
             capDuration = float(captureRe[0][0])
             capTargetFps = float(captureRe[0][1])
@@ -792,8 +792,7 @@ class AnimatedGif:
             capX = int(captureRe[0][4])
             capY = int(captureRe[0][5])
             cursorOn = int(captureRe[0][6])
-            retina = int(captureRe[0][7])
-            web = int(captureRe[0][8])
+            web = int(captureRe[0][7])
 
             self.Capture(
                 capDuration,
@@ -803,7 +802,6 @@ class AnimatedGif:
                 capX,
                 capY,
                 cursorOn,
-                retina,
                 web,
             )
 
@@ -856,7 +854,7 @@ class AnimatedGif:
     def GetConfig(self):
         return self.conf
 
-    def Capture(self, seconds, targetFps, width, height, x, y, showCursor, retinaDisplay, web):
+    def Capture(self, seconds, targetFps, width, height, x, y, showCursor, web):
         if seconds < 1:
             return False
 
@@ -869,12 +867,6 @@ class AnimatedGif:
         #
         imgDataArray = []
         imgDimensions = ()
-
-        if retinaDisplay:
-            width *= 2
-            height *= 2
-            x *= 2
-            y *= 2
 
         resizeRatio = 1.0
 
@@ -937,9 +929,9 @@ class AnimatedGif:
                     imgDataArray.append(img.tobytes())  # PILLOW
 
             elif ImAMac():
-                capFileName += ".bmp"  # Supported formats: png, bmp jpg
+                capFileName += ".png"  # Supported formats: png, pdf, jpg, tiff
 
-                scrCapCmd = "screencapture -x "
+                scrCapCmd = "screencapture -x -R %d,%d,%d,%d " % (x, y, width, height)
 
                 if showCursor:
                     scrCapCmd += "-C "
@@ -948,9 +940,19 @@ class AnimatedGif:
 
                 os.system(scrCapCmd)
 
+                if not os.path.exists(capFileName):
+                    logging.error("Capture frame was not created: " + capFileName)
+                    self.callback(False)
+                    continue
+
             self.imageSequence.append(capFileName)
             imgIdx += 1
             self.callback(False)
+
+        if not self.imageSequence:
+            self.callback(True)
+            self.FatalError("Screen capture failed. No frames were captured. Please ensure Screen Recording permission is granted in System Settings > Privacy & Security > Screen Recording.")
+            return False
 
         # Post-process
         if ImAPC():
@@ -958,13 +960,13 @@ class AnimatedGif:
                 logging.info("Using fps-optimized screen cap")
 
                 frameCount = 0
-                for x in range(0, len(imgDataArray)):
+                for idx in range(0, len(imgDataArray)):
                     try:
                         capPath = self.imageSequence[frameCount]
                     except IndexError:
                         break
                     # PIL uses fromstring
-                    PIL.Image.frombytes("RGB", imgDimensions, imgDataArray[x]).resize(
+                    PIL.Image.frombytes("RGB", imgDimensions, imgDataArray[idx]).resize(
                         (int(width * resizeRatio), int(height * resizeRatio)),
                         PIL.Image.LANCZOS,
                     ).save(capPath)
@@ -978,27 +980,6 @@ class AnimatedGif:
                 if missingCount != 0:
                     logging.error("Not all capture files were accounted for: %d missing " % (missingCount))
                     self.imageSequence = self.imageSequence[0 : min(frameCount, len(self.imageSequence))]
-
-        # Screen capper for Mac can't crop a specific region, so we need to do it
-        # Todo: for some reason, PNG to PNG doesn't work!!
-        if ImAMac():
-            for i in range(0, len(self.imageSequence)):
-                newFileName = os.path.dirname(self.imageSequence[i]) + "/" + os.path.splitext(os.path.basename(self.imageSequence[i]))[0] + ".jpg"
-
-                cmdConvert = '"%s" -comment "Converting captured frames:%d" -comment "instagiffer" "%s" -quality 100%% %s "%s"' % (
-                    self.conf.GetParam("paths", "convert"),
-                    i * 100 / len(self.imageSequence),
-                    self.imageSequence[i],
-                    "-crop %dx%d+%d+%d" % (width, height, x, y),
-                    newFileName,
-                )
-
-                self.imageSequence[i] = newFileName
-
-                if not RunProcess(cmdConvert, self.callback, False, False):
-                    self.FatalError("Unable to crop screen capture frame: " + os.path.basename(self.imageSequence[x]))
-
-            self.callback(True)
 
         self.videoLength = "00:00:%02d.000" % (seconds)
         self.videoFps = imgIdx / seconds
@@ -2790,7 +2771,8 @@ class GifApp:
         self.frameTimingOrCompressionChanges = 0
         self.lastProcessTsByLevel = [0, 0, 0, 0]
 
-        self.screenCapDlgGeometry = ""
+        self.screenCapDlgDimensions = ""
+        self.screenCapDlgPosition = ""
         self.mainTimerValueMS = 2000
         self.savePath = None
         self.parent.withdraw()  # Hide. add components then show at the end
@@ -2827,7 +2809,9 @@ class GifApp:
         #
         # Initialize variables with configuration defaults
         #
-        self.screenCapDlgGeometry = self.conf.GetParam("screencap", "sizeandposition")
+        self.screenCapDlgDimensions = self.conf.GetParam("screencap", "dimensions")
+        pos = self.conf.GetParam("screencap", "position")
+        self.screenCapDlgPosition = "+%s" % pos.replace(",", "+") if pos else ""
         timerMs = self.conf.GetParam("settings", "idleProcessTimeoutMs")
 
         if timerMs != "" and timerMs.isdigit() and int(timerMs) > 1000:
@@ -3626,7 +3610,6 @@ class GifApp:
 
         self.screenCapDurationSec = StringVar()
         self.screenCapLowerFps = IntVar()
-        self.screenCapRetina = IntVar()
         self.screenCapShowCursor = IntVar()
         self.screenCapDurationSec.set(5.0)
 
@@ -5103,7 +5086,7 @@ class GifApp:
         rc = True
         errStr = "Unknown error"
         urlPatterns = re.compile(r"^(www\.|https://|http://)")
-        capPattern = re.compile(r"^::capture ([\.0-9]+) ([\.0-9]+) ([0-9]+)x([0-9]+)\+(\-?[0-9]+)\+(\-?[0-9]+) cursor=(\d) retina=(\d) web=(\d)$")
+        capPattern = re.compile(r"^::capture ([\.0-9]+) ([\.0-9]+) ([0-9]+)x([0-9]+)\+(\-?[0-9]+)\+(\-?[0-9]+) cursor=(\d) web=(\d)$")
         fileName = self.txtFname.get().strip()
 
         # Check same URL?
@@ -5276,6 +5259,7 @@ class GifApp:
             y = self.mainFrame.winfo_rooty() + 50
             dlg.geometry("+%d+%d" % (x, y))
 
+        dlg.bind("<Escape>", lambda e: dlg.destroy())
         dlg.update()
         dlg.deiconify()
         dlg.lift()
@@ -5355,6 +5339,21 @@ class GifApp:
         return self.fonts[fontFamily][fontStyle]
 
     def OnScreenCapture(self):
+        # On macOS, verify screen recording permission before showing the dialog
+        if ImAMac():
+            testFile = os.path.join(self.tempDir, "scrtest.png")
+            os.system('screencapture -x "%s"' % testFile)
+            if os.path.exists(testFile):
+                os.remove(testFile)
+            else:
+                self.Alert(
+                    "Screen Recording Not Allowed",
+                    "Screen recording permission has not been granted.\n\n"
+                    "Please go to System Settings > Privacy & Security > Screen Recording "
+                    "and enable access for this application, then restart Instagiffer.",
+                )
+                return
+
         resizable = True
         popupWindow = self.CreateChildDialog("Screen Capture Configuration", resizable)
 
@@ -5362,7 +5361,7 @@ class GifApp:
         popupWindow.wm_attributes("-alpha", 0.7)
         popupWindow.wm_attributes("-topmost", True)
 
-        lblDuration = Label(popupWindow, font=self.defaultFont, text="Length (s)")
+        lblDuration = Label(popupWindow, font=self.defaultFont, text="Duration (s)")
         spnDuration = Spinbox(
             popupWindow,
             font=self.defaultFont,
@@ -5378,12 +5377,6 @@ class GifApp:
             text="Web-optimized",
             variable=self.screenCapLowerFps,
         )
-        chkRetina = Checkbutton(
-            popupWindow,
-            font=self.defaultFont,
-            text="Retina Display",
-            variable=self.screenCapRetina,
-        )
         chkCursor = Checkbutton(
             popupWindow,
             font=self.defaultFont,
@@ -5396,32 +5389,30 @@ class GifApp:
         # Place items on grid
 
         columns = 1
-        btnStartCap.grid(row=1, column=columns, padx=2, pady=5)
-        columns += 1
         lblDuration.grid(row=1, column=columns, padx=2, pady=2)
         columns += 1
         spnDuration.grid(row=1, column=columns, padx=2, pady=2)
         columns += 1
         chkLowFps.grid(row=1, column=columns, padx=2, pady=2)
         columns += 1
-
-        if ImAMac():
-            chkRetina.grid(row=1, column=columns, padx=2, pady=2)
-            columns += 1
-        else:
-            chkCursor.grid(row=1, column=columns, padx=2, pady=2)
-            columns += 1
+        chkCursor.grid(row=1, column=columns, padx=2, pady=2)
+        columns += 1
+        btnStartCap.grid(row=1, column=columns, padx=2, pady=5)
+        columns += 1
 
         lblResizeWindow.grid(row=0, column=0, columnspan=columns + 1, padx=2, pady=5, sticky="NSEW")
+
+        # Tab order
+        for widget in (spnDuration, chkLowFps, chkCursor, btnStartCap):
+            widget.lift()
         popupWindow.rowconfigure(0, weight=1)
         popupWindow.columnconfigure(0, weight=1)
 
         tooltips = {
             spnDuration: "Choose how long you wish to capture for. A reasonable value here is from 5-15 seconds.",
-            chkRetina: "Check this if your Mac has a retina display. If you don't check this, your capture region will not match what actually gets recorded.",
             chkLowFps: "Select this option if you plan on posting the GIF online. A lower frame rate and smaller image size provides you some budget to increase image quality.",
             chkCursor: "If you want the cursor to be visible as a small dot, select this option.",
-            btnStartCap: "Click here to start recording. If you CTRL-CLICK, a 5 second count-down will occur",
+            btnStartCap: "Click to start recording with a countdown. Hold the modifier key to skip the countdown.",
         }
 
         for item, tipString in tooltips.items():
@@ -5496,12 +5487,17 @@ class GifApp:
             y = popupWindow.winfo_y() + deltay
             popupWindow.geometry("+%s+%s" % (x, y))
 
-        def OnCloseScreenCapDlg():
-            # Save window position
-            self.screenCapDlgGeometry = popupWindow.geometry()
-            popupWindow.destroy()
+        def SaveScreenCapDlgGeometry(event):
+            if event.widget != popupWindow:
+                return
+            parts = popupWindow.geometry().split("+")
+            self.screenCapDlgDimensions = parts[0]
+            if len(parts) == 3:
+                self.screenCapDlgPosition = "+%s+%s" % (parts[1], parts[2])
 
-        def OnStartClicked(doCountdown=False):
+        popupWindow.bind("<Destroy>", SaveScreenCapDlgGeometry)
+
+        def OnStartClicked(doCountdown=True):
             fps = self.conf.GetParam("screencap", "frameRateLimit")
 
             try:
@@ -5521,7 +5517,7 @@ class GifApp:
             self.txtFname.delete(0, END)
             self.txtFname.insert(
                 0,
-                "::capture %s %s %dx%d+%d+%d cursor=%d retina=%d web=%d"
+                "::capture %s %s %dx%d+%d+%d cursor=%d web=%d"
                 % (
                     self.screenCapDurationSec.get(),
                     fps,
@@ -5530,44 +5526,41 @@ class GifApp:
                     x,
                     y,
                     self.screenCapShowCursor.get(),
-                    self.screenCapRetina.get(),
                     self.screenCapLowerFps.get(),
                 ),
             )
 
-            OnCloseScreenCapDlg()
+            popupWindow.destroy()
 
-            # Show an on screen alert
+            # Show an on-screen countdown overlay centered on the capture area
             if doCountdown:
+                cdW, cdH = 200, 75
+                cdX = x + (w - cdW) // 2
+                cdY = y + (h - cdH) // 2
+
                 captureWarning = Toplevel(self.parent)
                 captureWarning.wm_attributes("-topmost", True)
-                captureWarning.wm_attributes("-alpha", 0.5)
                 captureWarning.wm_overrideredirect(1)
+                captureWarning.wm_geometry("%dx%d+%d+%d" % (cdW, cdH, cdX, cdY))
                 lnlCaptureCountdown = Label(
                     captureWarning,
-                    text="",
                     justify=CENTER,
-                    background="white",
-                    relief=SOLID,
-                    borderwidth=3,
-                    font=("Arial", "25", "normal"),
+                    background="black",
+                    foreground="white",
+                    relief=FLAT,
+                    font=("Arial", "25", "bold"),
                 )
                 lnlCaptureCountdown.pack(expand=1, fill="both")
-                captureWarning.wm_geometry("200x75+0+0")  # % (w, h, x, y))
+                captureWarning.update_idletasks()
 
-                countDownStr = ["Go!"]
-                countDownTimeSec = [0.15]
                 countDownValSecs = int(self.conf.GetParam("screencap", "countDownSeconds"))
-
-                for x in range(1, countDownValSecs + 1):
-                    countDownStr.insert(0, "Capture in %d" % (x))
-                    countDownTimeSec.insert(0, 1)
-
-                for i in range(0, len(countDownStr)):
-                    self.SetStatus(countDownStr[i])
-                    lnlCaptureCountdown.configure(text=countDownStr[i])
-                    self.OnShowProgress(False)
-                    time.sleep(countDownTimeSec[i])
+                for secs in range(countDownValSecs, 0, -1):
+                    lnlCaptureCountdown.configure(text="Capture in %d" % secs)
+                    captureWarning.update()
+                    time.sleep(1)
+                lnlCaptureCountdown.configure(text="Go!")
+                captureWarning.update()
+                time.sleep(0.15)
 
                 captureWarning.destroy()
 
@@ -5575,13 +5568,14 @@ class GifApp:
             self.OnShowProgress(True)
             self.OnLoadVideo()
 
-        def OnCtrlStartClicked(event):
-            OnStartClicked(True)
+        mod = "Command" if ImAMac() else "Control"
 
         # Attach handlers
-        popupWindow.protocol("WM_DELETE_WINDOW", OnCloseScreenCapDlg)
+        popupWindow.protocol("WM_DELETE_WINDOW", popupWindow.destroy)
         btnStartCap.configure(command=OnStartClicked)
-        btnStartCap.bind("<Control-Button-1>", OnCtrlStartClicked)
+        btnStartCap.bind("<%s-Button-1>" % mod, lambda e: OnStartClicked(False))
+        popupWindow.bind("<Return>", lambda e: OnStartClicked())
+        popupWindow.bind("<%s-Return>" % mod, lambda e: OnStartClicked(False))
 
         lblResizeWindow.bind("<ButtonPress-1>", StartMove)
         lblResizeWindow.bind("<ButtonRelease-1>", StopMove)
@@ -5592,8 +5586,9 @@ class GifApp:
         popupWindow.bind("<Shift-MouseWheel>", OnMouseWheelY)
         popupWindow.bind("<MouseWheel>", OnMouseWheel)
 
-        # Block until dialog closes
-        self.WaitForChildDialog(popupWindow, self.screenCapDlgGeometry)
+        if self.screenCapDlgDimensions:
+            popupWindow.geometry(self.screenCapDlgDimensions)
+        self.WaitForChildDialog(popupWindow, self.screenCapDlgPosition or None, focus_widget=spnDuration)
 
     def SetLogoDefaults(self):
         if len(self.OnSetLogoDefaults) > 0:

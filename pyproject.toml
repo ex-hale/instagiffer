@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "instagiffer"
-version = "1.77"
+dynamic = ["version"]
 description = "The easy way to make GIFs from videos"
 readme = "README.md"
 license = "BSD-4-Clause"
@@ -28,7 +28,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest", "pylint", "black"]
+dev = ["setuptools", "pytest", "pylint", "black"]
 build-mac = ["py2app"]
 build-win = ["cx_Freeze"]
 
@@ -41,6 +41,9 @@ instagiffer = "instagiffer:main"
 
 [tool.setuptools]
 py-modules = ["instagiffer"]
+
+[tool.setuptools.dynamic]
+version = {attr = "instagiffer.INSTAGIFFER_VERSION"}
 
 [tool.black]
 line-length = 200
