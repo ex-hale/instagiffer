@@ -47,7 +47,7 @@ def applescript(script, timeout=10):
 class InstagifferAutomator:
     """Drive Instagiffer's GUI via macOS System Events."""
 
-    def __init__(self, process=None, process_name="Python", app_title="Instagiffer", launch_cmd=None, working_dir=None, startup_timeout=3.0, poll_interval=0.1):
+    def __init__(self, process=None, process_name="Python", app_title="Instagiffer", launch_cmd=None, working_dir=None, startup_timeout=8.0, poll_interval=0.1):
         self.process = process
         self.process_name = process_name
         self.app_title = app_title

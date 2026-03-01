@@ -18,7 +18,6 @@ classifiers = [
     "Environment :: MacOS X",
     "Environment :: Win32 (MS Windows)",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
@@ -39,6 +38,9 @@ Changelog = "https://github.com/ex-hale/instagiffer/releases"
 
 [project.scripts]
 instagiffer = "instagiffer:main"
+
+[tool.setuptools]
+py-modules = ["instagiffer"]
 
 [tool.black]
 line-length = 200

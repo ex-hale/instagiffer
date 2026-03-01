@@ -1042,19 +1042,14 @@ class AnimatedGif:
                 None,
             )
 
-        if ImAMac() and os.path.isdir("./deps/mac/im"):
-            # Only needed when using the bundled standalone ImageMagick;
-            # Homebrew's magick manages its own font cache automatically.
-            fontCacheDir = "./deps/mac/im/var/cache/fontconfig"
-
-            if not os.path.exists(fontCacheDir):
-                NotifyUser(
-                    "First Time",
-                    "Welcome to Instagiffer for Mac! Before you can use text features, I need to build a font database. This will take a few minutes.",
-                )
-                logging.info("First run. Need to build font cache first: " + fontCacheDir)
-                runCallback = self.callback
-                statBarCB = FontConfOutHandler
+        if ImAMac():
+            # Point fontconfig at the bundled config so the static magick
+            # binary can discover macOS system fonts.
+            convertPath = self.conf.GetParam("paths", "convert")
+            fontsDir = os.path.join(os.path.dirname(convertPath), "etc", "fonts")
+            if os.path.isdir(fontsDir):
+                os.environ["FONTCONFIG_PATH"] = os.path.abspath(fontsDir)
+                logging.info("FONTCONFIG_PATH=%s", os.environ["FONTCONFIG_PATH"])
 
         cmdListFonts = '"%s" -list font' % (self.conf.GetParam("paths", "convert"))
         fontsOutput, _ = RunProcess(
@@ -3030,7 +3025,7 @@ class GifApp:
         padding = 2
 
         self.status = Label(parent, text="", bd=1, relief=SUNKEN, anchor=W)
-        self.status.pack(side=BOTTOM, fill=X, padx=12 if ImAMac() else 0)
+        self.status.pack(side=BOTTOM, fill=X, padx=12 if ImAMac() else 0, pady=(0, 12) if ImAMac() else 0)
 
         # Progress bar
         #######################################################################
@@ -7666,7 +7661,27 @@ def main():
 
     import platform
 
-    logging.info("OS: %s %s (%s)", platform.system(), platform.release(), platform.machine())
+    def macos_marketing_name():
+        ver = platform.mac_ver()[0]
+        if not ver:
+            return None
+        try:
+            import re
+
+            license_path = "/System/Library/CoreServices/Setup Assistant.app/Contents/Resources/en.lproj/OSXSoftwareLicense.rtf"
+            with open(license_path, "r", encoding="utf-8", errors="replace") as f:
+                for line in f:
+                    m = re.search(
+                        r"SOFTWARE LICENSE AGREEMENT FOR (macOS \S+)", line
+                    )
+                    if m:
+                        return f"{m.group(1)} {ver}"
+        except Exception:
+            pass
+        return f"macOS {ver}"
+
+    os_display = macos_marketing_name() or f"{platform.system()} {platform.release()}"
+    logging.info("OS: %s (%s)", os_display, platform.machine())
     logging.info("Python: %s.%s.%s", *sys.version_info[:3])
     logging.info("Locale: %s, Encoding: %s", locale.getlocale()[0] or "C", locale.getpreferredencoding())
     logging.info("App: %s, Home: %s", exeDir, expanduser("~"))
