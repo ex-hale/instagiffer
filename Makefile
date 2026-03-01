@@ -2,8 +2,8 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
-VERSION := $(shell perl -ne 'print "$$1" if /INSTAGIFFER_VERSION\s*=\s*"([0-9.]+)"/' instagiffer.py)
-PRERELEASE := $(shell perl -ne 'print "$$1" if /INSTAGIFFER_PRERELEASE\s*=\s*"([^"]*)"/' instagiffer.py)
+VERSION := $(shell python3 -c "print(next(l.split('\"')[1] for l in open('instagiffer.py') if l.startswith('INSTAGIFFER_VERSION')))")
+PRERELEASE := $(shell python3 -c "print(next(l.split('\"')[1] for l in open('instagiffer.py') if l.startswith('INSTAGIFFER_PRERELEASE')))")
 MAC_APP_PATH := dist/Instagiffer.app
 
 .PHONY: setup test test-videos lint format run clean \
@@ -17,31 +17,31 @@ MAC_APP_PATH := dist/Instagiffer.app
 
 setup: $(VENV)/bin/activate
 
-$(VENV)/bin/activate: requirements.txt
+$(VENV)/bin/activate: pyproject.toml
 	python3 -m venv $(VENV)
-	$(PIP) install -r requirements.txt
+	$(PIP) install -e ".[dev]"
 	@echo "\nDone. Activate with: source $(VENV)/bin/activate"
 
 # Short Creative Commons videos for integration tests
 TEST_VIDEO_URLS := https://www.youtube.com/watch?v=aqz-KE-bpKQ https://www.youtube.com/watch?v=L_uXZEkhlZU
 test-videos:
-	@mkdir -p test_data
+	@mkdir -p test/test_data
 	@i=1; for url in $(TEST_VIDEO_URLS); do \
-		if [ ! -f "test_data/test_video_$$i.mp4" ]; then \
-			yt-dlp -f "worst[ext=mp4]/worst" -o "test_data/test_video_$$i.mp4" "$$url"; \
+		if [ ! -f "test/test_data/test_video_$$i.mp4" ]; then \
+			yt-dlp -f "worst[ext=mp4]/worst" -o "test/test_data/test_video_$$i.mp4" "$$url"; \
 		fi; \
 		i=$$((i + 1)); \
 	done
 
 test: setup test-videos
-	@rm -f test_data/*.gif
-	$(PYTHON) -m pytest test_instagiffer.py -v --tb=short
+	@rm -f test/test_data/*.gif
+	$(PYTHON) -m pytest test/test_instagiffer.py -v --tb=short
 
 lint: setup
-	$(PYTHON) -m pylint instagiffer.py main.py test_instagiffer.py
+	$(PYTHON) -m pylint instagiffer.py main.py test/test_instagiffer.py test/instagiffer_automation.py
 
 format: setup
-	$(PYTHON) -m black instagiffer.py main.py test_instagiffer.py
+	$(PYTHON) -m black instagiffer.py main.py test/test_instagiffer.py test/instagiffer_automation.py
 
 run: setup
 	$(PYTHON) main.py
@@ -69,7 +69,7 @@ mac_deps:
 mac_app: setup
 	$(PYTHON) -m compileall instagiffer.py
 	@echo "Building Mac release with py2app"
-	$(PYTHON) setup-mac-py2app.py py2app
+	$(PYTHON) release/setup-mac-py2app.py py2app
 
 mac_dmg: mac_app
 	@echo "Building DMG installer (v$(VERSION)$(PRERELEASE))"
@@ -96,12 +96,12 @@ mac_release: mac_dmg mac_pkg
 
 win_exe:
 	rd /S /Q build 2>NUL || true
-	python setup-win-cx_freeze.py build
+	python release/setup-win-cx_freeze.py build
 	rmdir /S /Q build\exe.win32-2.7\tk\demos 2>NUL || true
 
 win_installer: win_exe
 	del instagiffer*setup.exe 2>NUL || true
-	"C:\Program Files (x86)\Inno Setup 5\ISCC.exe" installer.iss \
+	"C:\Program Files (x86)\Inno Setup 5\ISCC.exe" release/installer.iss \
 		/dMyAppVersion=$(VERSION)$(PRERELEASE)
 
 win_portable: win_installer
@@ -125,4 +125,4 @@ win_release: win_installer win_portable
 clean:
 	rm -rf $(VENV) __pycache__ .pytest_cache instagiffer-event.log
 	rm -rf dist/ build/ *.pyc *.dmg *.pkg
-	rm -rf test_data/
+	rm -rf test/test_data/

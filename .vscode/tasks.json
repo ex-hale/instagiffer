@@ -2,17 +2,60 @@
     "version": "2.0.0",
     "tasks": [
         {
+            "label": "Run App",
+            "type": "shell",
+            "command": "make",
+            "args": ["run"],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
             "label": "Run Tests",
-            "type": "process",
-            "command": "${workspaceFolder}/.venv/bin/python3",
-            "args": ["-m", "pytest", "test_instagiffer.py", "-v", "--tb=short"],
-            "options": {
-                "cwd": "${workspaceFolder}"
-            },
-            "presentation": {
-                "reveal": "always",
-                "panel": "shared"
-            }
+            "type": "shell",
+            "command": "make",
+            "args": ["test"],
+            "group": "test",
+            "problemMatcher": []
+        },
+        {
+            "label": "Lint",
+            "type": "shell",
+            "command": "make",
+            "args": ["lint"],
+            "group": "test",
+            "problemMatcher": ["$pylint"]
+        },
+        {
+            "label": "Format",
+            "type": "shell",
+            "command": "make",
+            "args": ["format"],
+            "group": "none",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build Mac App",
+            "type": "shell",
+            "command": "make",
+            "args": ["mac_app"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Build Mac Release",
+            "type": "shell",
+            "command": "make",
+            "args": ["mac_release"],
+            "group": "build",
+            "problemMatcher": []
+        },
+        {
+            "label": "Clean",
+            "type": "shell",
+            "command": "make",
+            "args": ["clean"],
+            "group": "none",
+            "problemMatcher": []
         }
     ]
 }

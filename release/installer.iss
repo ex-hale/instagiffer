@@ -18,17 +18,17 @@ AppSupportURL={#MyAppURL}
 AppUpdatesURL={#MyAppURL}
 DefaultDirName={pf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
-OutputDir=.\
+OutputDir=..\
 OutputBaseFilename=instagiffer-{#MyAppVersion}-setup
-SetupIconFile=.\Instagiffer.ico
+SetupIconFile=..\instagiffer.ico
 Compression=lzma
 SolidCompression=yes
 
-WizardSmallImageFile=.\doc\graphics\installer_icon.bmp
+WizardSmallImageFile=..\doc\graphics\installer_icon.bmp
 ;WizardSmallImageBackColor=$395976
 WizardImageBackColor=$395976
 WizardImageStretch=yes
-WizardImageFile=.\doc\graphics\installer_side.bmp
+WizardImageFile=..\doc\graphics\installer_side.bmp
 
 
 [Languages]
@@ -39,7 +39,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 ;Source: ".\dist\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Permissions: users-modify
-Source: ".\build\exe.win32-2.7\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Permissions: users-modify
+Source: "..\build\exe.win32-2.7\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Permissions: users-modify
 
 ; NOTE: Don't use "Flags: ignoreversion" on any shared system files
 

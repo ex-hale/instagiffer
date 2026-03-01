@@ -42,7 +42,6 @@ __author__ = "Justin Todd"
 __copyright__ = "Copyright 2013-2026, Exhale Software Inc."
 __maintainer__ = "Justin Todd"
 __email__ = "instagiffer@gmail.com"
-__imgurcid__ = "58fc34d08ab311d"
 __status__ = "Production"
 __version__ = INSTAGIFFER_VERSION + INSTAGIFFER_PRERELEASE
 __release__ = False  # If this is false, bindep output, and info-level statements will be displayed stdout
@@ -50,10 +49,6 @@ __changelogUrl__ = "https://github.com/ex-hale/instagiffer/releases"
 __faqUrl__ = "https://github.com/ex-hale/instagiffer#faq"
 
 import hashlib
-import base64
-import json
-import urllib.request
-import urllib.parse
 import sys
 import os
 import shutil
@@ -89,7 +84,6 @@ from PIL import ImageTk, ImageFilter, ImageDraw
 
 # Win32 specific includes
 if sys.platform == "win32":
-    import winsound
     import win32api
 
     # Windows uses the PIL ImageGrab module for screen capture
@@ -106,6 +100,7 @@ def ImAMac():
 def ImAPC():
     """Return true if running on a PC"""
     return sys.platform == "win32"
+
 
 
 def OpenFileWithDefaultApp(fileName):
@@ -135,18 +130,6 @@ def GetFileExtension(filename):
     fext = fext.strip(".")
     return fext
 
-
-def AudioPlay(wavPath):
-    if ImAMac():
-        if wavPath is not None:
-            subprocess.call(["afplay", wavPath])  # blocks
-    elif ImAPC():
-        if wavPath is None:
-            winsound.PlaySound(None, 0)
-        else:
-            winsound.PlaySound(wavPath, winsound.SND_FILENAME | winsound.SND_ASYNC)
-
-    return True
 
 
 def IsPictureFile(fileName):
@@ -519,7 +502,7 @@ class InstaConfig:
 
     def ReloadFromFile(self):
         self.config = None
-        self.config = ConfigParser(inline_comment_prefixes=(";", "#"))
+        self.config = ConfigParser()
         self.config.read(self.path)
 
     def ParamExists(self, category, key):
@@ -734,7 +717,6 @@ class AnimatedGif:
         self.previewFile = os.path.join(workDir, "preview.gif")
         self.vidThumbFile = os.path.join(workDir, "thumb.png")
         self.blankImgFile = os.path.join(workDir, "blank.gif")
-        self.audioClipFile = os.path.join(workDir, "audio.wav")
 
         self.OverwriteOutputGif(self.conf.GetParamBool("settings", "overwriteGif"))
 
@@ -788,7 +770,6 @@ class AnimatedGif:
         self.DeleteProcessedImages()
         self.DeleteCapturedImages()
         self.DeleteMaskImages()
-        self.DeleteAudioClip()
 
         # self.DeleteGifOutput()
 
@@ -1707,43 +1688,6 @@ class AnimatedGif:
                 except:
                     self.FatalError("Failed to delete GIF out file. Is it use?")
 
-    def UploadGifToImgur(self):
-        if not self.GifExists():
-            self.FatalError("Can't find the GIF. Unable to upload to Imgur")
-            return None
-
-        try:
-            b64Image = base64.b64encode(open(self.GetLastGifOutputPath(), "rb").read())
-        except:
-            return None
-
-        data = {
-            "key": __imgurcid__,
-            "image": b64Image,
-            "type": "base64",
-            "name": "Instagiffer.gif",
-            "title": "Created and uploaded using Instagiffer",
-        }
-
-        req = urllib.request.Request("https://api.imgur.com/3/upload.json", urllib.parse.urlencode(data).encode())
-        req.add_header("Authorization", "Client-ID " + __imgurcid__)
-
-        try:
-            response = urllib.request.urlopen(req)
-        except:
-            return None
-
-        response = json.loads(response.read())
-
-        imgUrl = str(response["data"]["link"])
-        logging.info("Imgur URL: " + imgUrl)
-
-        if self.rootWindow is not None:
-            self.rootWindow.clipboard_clear()
-            self.rootWindow.clipboard_append(imgUrl)
-
-        return imgUrl
-
     def GetMaskFileName(self, maskIdx):
         return "%simage%04d.png" % (self.maskDir + os.sep, maskIdx + 1)
 
@@ -1792,93 +1736,6 @@ class AnimatedGif:
 
     def GetDownloadedQuality(self):
         return self.downloadQuality
-
-    def DeleteAudioClip(self):
-        try:
-            os.remove(self.GetAudioClipPath())
-        except:
-            pass
-
-    def GetAudioClipPath(self):
-        if os.path.exists(self.audioClipFile):
-            return self.audioClipFile
-        else:
-            return None
-
-    def ExtractAudioClip(self):
-        audioPath = self.conf.GetParam("audio", "path")
-        startTimeStr = float(self.conf.GetParam("audio", "startTime"))
-        volume = int(self.conf.GetParam("audio", "volume")) / 100.0
-        durationSec = self.GetTotalRuntimeSec()
-
-        if len(audioPath) == 0:
-            return None
-
-        try:
-            os.remove(self.audioClipFile)
-        except:
-            pass
-
-        cmdExtractImages = '"%s" -y -v verbose -ss %s -t %.1f -i "%s" -af "volume=%.1f" "%s"' % (
-            self.conf.GetParam("paths", "ffmpeg"),
-            startTimeStr,
-            durationSec,
-            audioPath,
-            volume,
-            self.audioClipFile,
-        )
-
-        success = RunProcess(cmdExtractImages, self.callback)
-
-        if not success:
-            return None
-        else:
-            return self.GetAudioClipPath()
-
-    def DownloadAudio(self, url):
-        # Make sure they don't download a playlist
-        if url.lower().find("youtube") != -1 and url.find("&list=") != -1:
-            logging.info("Youtube playlist detected. Removing playlist component from URL")
-            url, sep, extra = url.partition("&list=")
-
-        downloadFileName = self.downloadDir + os.sep + "audiofile_" + str(uuid.uuid4())
-
-        cmdVideoDownload = (
-            '"'
-            + self.conf.GetParam("paths", "youtubedl")
-            + '"'
-            + " -v "
-            + ' --ffmpeg-location "'
-            + self.conf.GetParam("paths", "ffmpeg")
-            + '"'
-            + " --restrict-filenames "
-            + " --no-check-certificate "
-            + " --newline "
-            + " -f bestaudio "
-            + ' -o "'
-            + downloadFileName
-            + '"'
-            + '   "'
-            + url
-            + '"'
-        )
-        # + ' -o "' + self.downloadDir + os.sep + '%(title)s.%(ext)s"' \
-
-        stdout, stderr = RunProcess(cmdVideoDownload, self.callback, True)
-
-        # matches1 = re.findall('\[download\] (.+) has already been downloaded', stdout, re.MULTILINE)
-        # matches2 = re.findall(' Destination: (.+)', stdout, re.MULTILINE)
-
-        # if matches1:
-        #     downloadFileName = matches1[0]
-        # elif matches2:
-        #     downloadFileName = matches2[0]
-
-        if not os.path.exists(downloadFileName):
-            logging.error("yt-dlp failed to download audio track")
-            self.FatalError("Failed to download audio track")
-
-        return downloadFileName
 
     def DownloadVideo(self, url):
         downloadFileName = self.downloadDir + os.sep + "videofile_" + str(uuid.uuid4())
@@ -2693,106 +2550,40 @@ class AnimatedGif:
             for f in sorted(glob.glob(self.resizeDir + os.sep + "*." + self.GetIntermediaryFrameFormat())):
                 shutil.copy2(f, self.processedDir)
 
-        #
-        # Now what file format are we dealing with?
-        #
+        # Using convert util
+        cmdCreateGif = '"%s" ' % (self.conf.GetParam("paths", "convert"))
+        # Playback rate and looping
+        cmdCreateGif += " -delay %d " % (self.GetGifFrameDelay())
+        cmdCreateGif += " -loop %d " % (int(self.conf.GetParam("rate", "numLoops")))
 
-        if self.GetFinalOutputFormat() == "gif":
-            # Using convert util
-            cmdCreateGif = '"%s" ' % (self.conf.GetParam("paths", "convert"))
-            # Playback rate and looping
-            cmdCreateGif += " -delay %d " % (self.GetGifFrameDelay())
-            cmdCreateGif += " -loop %d " % (int(self.conf.GetParam("rate", "numLoops")))
+        if self.conf.GetParamBool("blend", "cinemagraphUseTransparency"):
+            cmdCreateGif += " -alpha set -dispose %d " % (int(self.conf.GetParamBool("blend", "cinemagraphKeyFrameIdx")))
 
-            if self.conf.GetParamBool("blend", "cinemagraphUseTransparency"):
-                cmdCreateGif += " -alpha set -dispose %d " % (int(self.conf.GetParamBool("blend", "cinemagraphKeyFrameIdx")))
+        # Input files (expand glob in Python; shell=False won't expand wildcards)
+        pattern = self.processedDir + os.sep + "*." + self.GetIntermediaryFrameFormat()
+        processedFiles = sorted(glob.glob(pattern))
+        for f in processedFiles:
+            cmdCreateGif += '"%s" ' % f
 
-            # Input files (expand glob in Python; shell=False won't expand wildcards)
-            pattern = self.processedDir + os.sep + "*." + self.GetIntermediaryFrameFormat()
-            processedFiles = sorted(glob.glob(pattern))
-            for f in processedFiles:
-                cmdCreateGif += '"%s" ' % f
+        # IM7: -layers must come after input images
+        if not self.conf.GetParamBool("blend", "cinemagraphUseTransparency"):
+            cmdCreateGif += "-layers optimizePlus "
 
-            # IM7: -layers must come after input images
-            if not self.conf.GetParamBool("blend", "cinemagraphUseTransparency"):
-                cmdCreateGif += "-layers optimizePlus "
+        cmdCreateGif += '"%s"' % fileName
 
-            cmdCreateGif += '"%s"' % fileName
-
-            out, err = RunProcess(cmdCreateGif, self.callback, returnOutput=True)
-
-        elif self.GetFinalOutputFormat() in ["mp4", "webm"]:
-            self.ExtractAudioClip()
-
-            secPerFrame = self.GetGifFrameDelay() * 10 / 1000.0
-            fps = 1.0 / secPerFrame
-            finalFps = 30
-            framesDir = self.GetProcessedImagesDir()
-
-            self.ReEnumeratePngFrames(self.GetProcessedImagesDir(), self.GetProcessedImageList())
-
-            #
-            # - vf Make width/height even
-            # - shortest Finish encoding when the shortest input stream ends.
-            # - h.264 format
-            # - use null audio
-            #
-            # "e:\ffmpeg\ffmpeg.exe" -r 1/5 -start_number 0 -i "E:\images\01\padlock%3d.png" -c:v libx264 -r 30 -pix_fmt yuv420p e:\out.mp4
-
-            cmdConvertToVideo = '"%s" -v verbose -y -r %.2f -start_number 0 -i "%simage%%04d.%s" ' % (
-                self.conf.GetParam("paths", "ffmpeg"),
-                fps,
-                framesDir,
-                self.GetIntermediaryFrameFormat(),
-            )
-
-            # Audio
-            if self.conf.GetParamBool("audio", "audioEnabled"):
-                if not os.path.exists(self.conf.GetParam("audio", "path")):
-                    self.FatalError("Could not find audio file")
-
-                if self.GetFinalOutputFormat() in ["webm"]:
-                    audioCodec = " libvorbis "
-                else:
-                    audioCodec = "aac -strict experimental"
-
-                volume = int(self.conf.GetParam("audio", "volume")) / 100.0
-
-                cmdConvertToVideo += ' -ss "%s" -i "%s" -af "volume=%.f" -c:a %s -b:a 128k  ' % (
-                    self.conf.GetParam("audio", "startTime"),
-                    self.conf.GetParam("audio", "path"),
-                    volume,
-                    audioCodec,
-                )
-            else:
-                cmdConvertToVideo += " -f lavfi -i aevalsrc=0 "
-
-            # video
-            if self.GetFinalOutputFormat() in ["mp4"]:
-                cmdConvertToVideo += ' -c:v libx264 -crf 18 -preset slow -vf "scale=trunc(in_w/2)*2:trunc(in_h/2)*2",setsar=1:1 -pix_fmt yuv420p '
-            elif self.GetFinalOutputFormat() in ["webm"]:
-                cmdConvertToVideo += " -c:v libvpx -crf 4 -b:v 312.5k -vf setsar=1:1 "
-            else:
-                cmdConvertToVideo += " -vf setsar=1:1 "
-
-            cmdConvertToVideo += ' -shortest  -r %d "%s"' % (finalFps, fileName)
-
-            out, err = RunProcess(cmdConvertToVideo, self.callback, returnOutput=True)
-        else:
-            self.FatalError("I don't know how to create %s files" % (self.GetFinalOutputFormat()))
+        out, err = RunProcess(cmdCreateGif, self.callback, returnOutput=True)
 
         if not os.path.exists(fileName) or os.path.getsize(fileName) == 0:
             logging.error(err)
-            self.FatalError("Failed to create %s :( " % (self.GetFinalOutputFormat()))
+            self.FatalError("Failed to create GIF :(")
             return 0
 
         self.gifCreated = True
         self.lastSavedGifPath = fileName
 
         # Run the gif optimizer
-        if self.GetFinalOutputFormat() == "gif":
-            self.AlterGifFrameTiming(fileName)
-            self.OptimizeGif(fileName)
+        self.AlterGifFrameTiming(fileName)
+        self.OptimizeGif(fileName)
 
         return self.GetSize()
 
@@ -2908,17 +2699,15 @@ class AnimatedGif:
         return int(w), int(h)
 
 
-
 class GifPlayerWidget(Label):
     """Tkinter widget that plays a gif."""
 
-    def __init__(self, master, processedImgList, frameDelayMs, resizable, soundPath=None):
+    def __init__(self, master, processedImgList, frameDelayMs, resizable):
         self.delay = frameDelayMs
         self.images = []
         self.frames = []
         self.resizable = resizable
         self.imgList = processedImgList
-        self.audioPath = soundPath
 
         if self.delay < 2:
             self.delay = 100
@@ -2941,7 +2730,6 @@ class GifPlayerWidget(Label):
         return "Dimensions: %dx%d" % (width, height)
 
     def Stop(self):
-        AudioPlay(None)
         self.after_cancel(self.cancel)
 
     def LoadImages(self, resize):
@@ -2966,9 +2754,6 @@ class GifPlayerWidget(Label):
     def Play(self):
         resizePause = 0
 
-        if self.idx == 0:
-            AudioPlay(self.audioPath)
-
         self.idx += 1
         if self.idx >= len(self.frames):
             self.idx = 0
@@ -2989,7 +2774,7 @@ class GifPlayerWidget(Label):
 
 class GifApp:
 
-    def __init__(self, parent, cmdlineVideoPath):
+    def __init__(self, parent, cmdlineVideoPath, configPath="instagiffer.conf"):
         global __version__
         global __release__
 
@@ -2997,6 +2782,7 @@ class GifApp:
         self.guiBusy = False
         self.showPreviewFlag = False
         self.parent = parent
+        self.configPath = configPath
         self.thumbnailIdx = 0
         self.timerHandle = None
         self.cancelRequest = False
@@ -3007,7 +2793,6 @@ class GifApp:
         self.captionChanges = 0
         self.miscGifChanges = 1
         self.frameTimingOrCompressionChanges = 0
-        self.audioChanges = 0
         self.lastProcessTsByLevel = [0, 0, 0, 0]
 
         self.screenCapDlgGeometry = ""
@@ -3041,8 +2826,7 @@ class GifApp:
         # Load config
         #
 
-        binPath = os.path.dirname(os.path.realpath(sys.argv[0]))
-        self.conf = InstaConfig(binPath + os.sep + "instagiffer.conf")
+        self.conf = InstaConfig(self.configPath)
         self.savePath = None
 
         #
@@ -3067,6 +2851,9 @@ class GifApp:
         #
         # Build GUI
         #
+
+        if ImAMac():
+            self.parent.tk.call("tk::unsupported::MacWindowStyle", "appearance", self.parent, "aqua")
 
         if __release__ == False:
             self.parent.title("Instagiffer - DEBUG MODE *******")
@@ -3142,12 +2929,8 @@ class GifApp:
         # File
         self.fileMenu = Menu(self.menubar, tearoff=0)
 
-        self.uploadMenu = Menu(self.fileMenu, tearoff=0)
-        self.uploadMenu.add_command(label="Imgur", underline=0, command=self.OnImgurUpload)
-
         self.fileMenu.add_command(label="Download Video...", underline=1, command=self.OnSaveVideoForLater)
         self.fileMenu.add_command(label="Change Save Location...", underline=7, command=self.OnSetSaveLocation)
-        self.fileMenu.add_cascade(label="Upload", underline=0, menu=self.uploadMenu)
         self.fileMenu.add_command(
             label="Delete Temporary Files",
             underline=0,
@@ -3333,7 +3116,7 @@ class GifApp:
 
         self.boxCropping = LabelFrame(
             frame,
-            text=" Step 3: Trim edges. Right-Click to preview. Double-Click to delete ",
+            text=" Step 3: Crop. Right-Click: Preview. Double-Click: Delete frame ",
         )
         self.boxCropping.grid(
             row=rowIdx,
@@ -3758,7 +3541,6 @@ class GifApp:
         self.borderColor = StringVar()
         self.isCinemagraph = IntVar()
         self.invertCinemagraph = IntVar()
-        self.isAudioEnabled = IntVar()
 
         self.sepiaAmount.set(100)
         self.desaturatedAmount.set(100)
@@ -3792,7 +3574,6 @@ class GifApp:
         self.isBlurred.trace_add("write", self.OnEffectsChange)
         self.blurredAmount.trace_add("write", self.OnEffectsChange)
         self.invertCinemagraph.trace_add("write", self.OnEffectsChange)
-        self.isAudioEnabled.trace_add("write", self.OnEffectsChange)
 
         self.lblEffects = Label(self.boxTweaks, text="FX & Filters")
         self.btnEditEffects = Button(
@@ -3882,11 +3663,34 @@ class GifApp:
         for item, tipString in tooltips.items():
             createToolTip(item, tipString)
 
+        # Keyboard shortcuts from config
+        self.BindKeybindings()
+
         logging.info("Instagiffer main window has been created")
+        self.txtFname.focus_set()
 
         if cmdlineVideoPath is not None:
             self.txtFname.insert(0, cmdlineVideoPath)
             self.OnLoadVideoEnterPressed(None)
+
+    def BindKeybindings(self):
+        """Read [keybindings] from config and bind them. Mod+ maps to Command on macOS, Control on Windows."""
+        mod = "Command" if sys.platform == "darwin" else "Control"
+        actions = {
+            "creategif": lambda e: self.OnCreateGif(),
+            "loadvideo": lambda e: self.OnLoadVideo(),
+            "editeffects": lambda e: self.OnEditEffects(),
+            "editcaption": lambda e: self.OnCaptionConfig(),
+            "manualcrop": lambda e: self.OnManualSizeAndCrop(),
+        }
+        if not self.conf.ParamExists("keybindings", "createGif"):
+            return
+        for key_name, handler in actions.items():
+            raw = self.conf.GetParam("keybindings", key_name)
+            if not raw:
+                continue
+            tk_seq = "<" + raw.replace("Mod", mod).replace("+", "-") + ">"
+            self.parent.bind(tk_seq, handler)
 
     def CreateAppDataFolder(self):
         self.tempDir = CreateWorkingDir(self.conf)
@@ -3949,19 +3753,9 @@ class GifApp:
         # Read menu settings
         self.OnChangeMenuSetting()
 
-    def ChangeFileFormat(self, newFormat):
-        if self.gif is None:
-            return False
-
-        if len(newFormat) == 0:
-            newFormat = "gif"
-
-        fname, fext = os.path.splitext(self.gif.GetNextOutputPath())
-        return self.OnSetSaveLocation(fname + "." + newFormat)
-
     def OnSetSaveLocation(self, location=None):
         if location is None:
-            formatList = [("Supported formats", ("*.gif", "*.webm", "*.mp4"))]
+            formatList = [("GIF", "*.gif")]
 
             if self.savePath is not None:
                 default = self.savePath
@@ -3975,7 +3769,7 @@ class GifApp:
         else:
             savePath = location
 
-        if not GetFileExtension(savePath) in ["gif", "webm", "mp4"]:
+        if GetFileExtension(savePath) != "gif":
             savePath += ".gif"
 
         if self.savePath != savePath:
@@ -3989,42 +3783,6 @@ class GifApp:
             self.gif.SetSavePath(self.savePath)
 
         self.SetStatus("Updated save location to " + self.savePath)
-
-    def OnImgurUpload(self):
-        ret = None
-        imgurErrorTitle = "Imgur Upload Failed"
-        imgurUploadSizeLimit = 2 * 1024 * 1024
-        imgurFormat = "gif"
-
-        if self.gif is None or not self.gif.GifExists():
-            self.Alert(
-                imgurErrorTitle,
-                "You haven't created your GIF yet. Just go ahead and click 'Create Gif' then try this again.",
-            )
-            return False
-        elif self.gif.GetFinalOutputFormat() != imgurFormat:
-            self.Alert(imgurErrorTitle, "File format must be %s!" % (imgurFormat))
-            return False
-        elif self.gif.GetSize() >= imgurUploadSizeLimit:
-            self.Alert(
-                imgurErrorTitle,
-                "File size must be under %d MB!" % (imgurUploadSizeLimit / (1024 * 1024)),
-            )
-            return False
-
-        self.SetStatus("Uploading GIF to Imgur... During this time, Instagiffer will appear frozen. Patience, K?")
-        ret = self.gif.UploadGifToImgur()
-        self.SetStatus("Gif uploaded to Imgur. URL: %s" % (ret))
-
-        if ret is None:
-            self.Alert(imgurErrorTitle, "Failed to upload GIF to Imgur. Grrrrr...")
-            return False
-        else:
-            self.Alert(
-                "Imgur Upload Succeeded!",
-                "Your GIF has been uploaded. The following address has been copied to your clipboard:\n\n%s" % (ret),
-            )
-            return True
 
     def OnSaveVideoForLater(self):
         if self.gif == None:
@@ -4860,8 +4618,6 @@ class GifApp:
             self.sclSpeedModifier.configure(state="normal")
             self.btnEditEffects.configure(state="normal")
 
-            self.fileMenu.entryconfigure(2, state="normal")  # imgur
-
             if self.gif.IsDownloadedVideo():
                 self.fileMenu.entryconfigure(0, state="normal")  # save for later
 
@@ -4870,7 +4626,6 @@ class GifApp:
 
         else:
             self.fileMenu.entryconfigure(0, state="disabled")  # save for later
-            self.fileMenu.entryconfigure(2, state="disabled")  # imgur
 
             self.cbxCaptionList.configure(state="disabled")
             self.sclFps.configure(state="disabled")
@@ -4941,7 +4696,6 @@ class GifApp:
         self.isBordered.set(self.gif.GetConfig().GetParamBool("effects", "border"))
         self.isCinemagraph.set(self.gif.GetConfig().GetParamBool("blend", "cinemagraph"))
         self.invertCinemagraph.set(self.gif.GetConfig().GetParamBool("blend", "cinemagraphInvert"))
-        self.isAudioEnabled.set(self.gif.GetConfig().GetParamBool("audio", "audioEnabled"))
 
         self.InitializeCropTool()
         self.guiBusy = False
@@ -5119,14 +4873,11 @@ class GifApp:
             gifSettingChanges += self.gif.GetConfig().SetParam("effects", "blur", str(blur))
             gifSettingChanges += self.gif.GetConfig().SetParam("color", "numColors", str(int(self.sclNumColors.get() * 2.55)))
             gifSettingChanges += self.gif.GetConfig().SetParam("color", "colorSpace", colorSpace)
-            gifSettingChanges += self.gif.GetConfig().SetParamBool("audio", "audioEnabled", self.isAudioEnabled.get())
-
             # Make sure we catch any caption and/or image blitting changes
             gifSettingChanges += self.captionChanges
             gifSettingChanges += self.miscGifChanges
 
             # Settings that only affect final file format
-            fileFormatSettingChanges += self.audioChanges
             fileFormatSettingChanges += self.frameTimingOrCompressionChanges
             fileFormatSettingChanges += self.gif.GetConfig().SetParam("rate", "speedModifier", str(self.sclSpeedModifier.get()))
 
@@ -5134,7 +4885,6 @@ class GifApp:
             if not preview:
                 self.captionChanges = 0
                 self.miscGifChanges = 0
-                self.audioChanges = 0
             else:
                 self.miscGifChanges += gifSettingChanges  # for now, just store these here
 
@@ -5290,7 +5040,7 @@ class GifApp:
                     "Processed %s frames not found" % (self.GetIntermediaryFrameFormat()),
                 )
             else:
-                self.SetStatus("GIF saved. GIF size: " + str(self.gif.GetSize() / 1024) + "kB. Path: " + self.gif.GetLastGifOutputPath())
+                self.SetStatus("GIF saved. GIF size: " + str(round(self.gif.GetSize() / 1024)) + "kB. Path: " + self.gif.GetLastGifOutputPath())
 
                 self.PlayGif(self.gif.GetProcessedImageList(), self.gif.GetGifFrameDelay())
 
@@ -5522,7 +5272,7 @@ class GifApp:
         dlg.grab_set()
         # self.guiBusy = True
 
-    def WaitForChildDialog(self, dlg, dlgGeometry=None):
+    def WaitForChildDialog(self, dlg, dlgGeometry=None, focus_widget=None):
         # Position over parent window before showing
         if dlgGeometry is not None and len(dlgGeometry) and dlgGeometry != "center":
             dlg.geometry(dlgGeometry)
@@ -5536,6 +5286,9 @@ class GifApp:
         dlg.lift()
         dlg.focus()
         dlg.grab_set()
+
+        if focus_widget:
+            focus_widget.focus_set()
 
         # Block until window is destroyed
         self.parent.wait_window(dlg)
@@ -5560,12 +5313,7 @@ class GifApp:
             popupWindow.resizable(width=FALSE, height=FALSE)
 
         try:
-            # Should the audio be previewed
-            soundPath = None
-            if ImAPC() and self.isAudioEnabled.get() and self.HaveAudioPath() and self.gif.GetFinalOutputFormat() != "gif":
-                soundPath = self.gif.GetAudioClipPath()
-
-            anim = GifPlayerWidget(popupWindow, filename, frameDelay * 10, isResizable, soundPath)
+            anim = GifPlayerWidget(popupWindow, filename, frameDelay * 10, isResizable)
         except MemoryError:
             self.Alert("Gif Player", "Unable to show preview. Your GIF is too big.")
             return
@@ -5576,11 +5324,10 @@ class GifApp:
             except:
                 pass
 
+            popupWindow.grab_release()
             popupWindow.destroy()
 
         lbl = "Location: " + self.gif.GetLastGifOutputPath()
-        if ImAMac() and self.isAudioEnabled and self.HaveAudioPath():
-            lbl += " \n(Sound not available in this player)"
 
         # Build form componets
         lblInfo = Label(popupWindow, text=lbl)
@@ -5594,6 +5341,8 @@ class GifApp:
         # Attach handlers
         popupWindow.protocol("WM_DELETE_WINDOW", OnDeletePlayer)
         btnClose.configure(command=OnDeletePlayer)
+        popupWindow.bind("<Return>", lambda e: OnDeletePlayer())
+        btnClose.focus_set()
 
         return self.WaitForChildDialog(popupWindow)
 
@@ -6482,44 +6231,17 @@ class GifApp:
         cropY = StringVar()
         cropWidth = StringVar()
         cropHeight = StringVar()
-        aspectLock = IntVar()
 
         cropX.set(sx)
         cropY.set(sy)
         cropWidth.set(sw)
         cropHeight.set(sh)
 
-        lblStartX = Label(dlg, font=self.defaultFont, text="Horizontal Start Position")
-        lblStartY = Label(dlg, font=self.defaultFont, text="Vertical Start Position")
-        lblAspectLock = Label(dlg, font=self.defaultFont, text="Maintain crop aspect ratio")
-        lblWidth = Label(dlg, font=self.defaultFont, text="GIF Width")
-        lblHeight = Label(dlg, font=self.defaultFont, text="GIF Height")
-        lblAspectLock = Label(dlg, font=self.defaultFont, text="Maintain crop aspect ratio")
+        lblWidth = Label(dlg, font=self.defaultFont, text="Width")
+        lblHeight = Label(dlg, font=self.defaultFont, text="Height")
+        lblStartX = Label(dlg, font=self.defaultFont, text="Offset X")
+        lblStartY = Label(dlg, font=self.defaultFont, text="Offset Y")
 
-        spnX = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=smaxw - 1,
-            increment=1,
-            width=5,
-            textvariable=cropX,
-            repeatdelay=300,
-            repeatinterval=14,
-            state="readonly",
-        )
-        spnY = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=smaxh - 1,
-            increment=1,
-            width=5,
-            textvariable=cropY,
-            repeatdelay=300,
-            repeatinterval=14,
-            state="readonly",
-        )
         spnWidth = Spinbox(
             dlg,
             font=self.defaultFont,
@@ -6544,24 +6266,35 @@ class GifApp:
             repeatinterval=14,
             state="readonly",
         )
-        chkAspectLock = Checkbutton(dlg, text="", variable=aspectLock)
+        spnX = Spinbox(
+            dlg,
+            font=self.defaultFont,
+            from_=0,
+            to=smaxw - 1,
+            increment=1,
+            width=5,
+            textvariable=cropX,
+            repeatdelay=300,
+            repeatinterval=14,
+            state="readonly",
+        )
+        spnY = Spinbox(
+            dlg,
+            font=self.defaultFont,
+            from_=0,
+            to=smaxh - 1,
+            increment=1,
+            width=5,
+            textvariable=cropY,
+            repeatdelay=300,
+            repeatinterval=14,
+            state="readonly",
+        )
         btnOK = Button(dlg, text="Done", padx=4, pady=4)
 
         # Place elements on grid
 
         rowIdx = -1
-
-        # rowIdx += 1
-        # lblAspectLock.grid  (row=rowIdx, column=0, sticky=W,  padx=4, pady=4)
-        # chkAspectLock.grid  (row=rowIdx, column=1, sticky=W,  padx=4, pady=4)
-
-        rowIdx += 1
-        lblStartX.grid(row=rowIdx, column=0, sticky=W, padx=4, pady=4)
-        spnX.grid(row=rowIdx, column=1, sticky=W, padx=4, pady=4)
-
-        rowIdx += 1
-        lblStartY.grid(row=rowIdx, column=0, sticky=W, padx=4, pady=4)
-        spnY.grid(row=rowIdx, column=1, sticky=W, padx=4, pady=4, columnspan=2)
 
         rowIdx += 1
         lblWidth.grid(row=rowIdx, column=0, sticky=W, padx=4, pady=4)
@@ -6569,17 +6302,24 @@ class GifApp:
 
         rowIdx += 1
         lblHeight.grid(row=rowIdx, column=0, sticky=W, padx=4, pady=4)
-        spnHeight.grid(row=rowIdx, column=1, sticky=W, padx=4, pady=4, columnspan=2)
+        spnHeight.grid(row=rowIdx, column=1, sticky=W, padx=4, pady=4)
+
+        rowIdx += 1
+        lblStartX.grid(row=rowIdx, column=0, sticky=W, padx=4, pady=4)
+        spnX.grid(row=rowIdx, column=1, sticky=W, padx=4, pady=4)
+
+        rowIdx += 1
+        lblStartY.grid(row=rowIdx, column=0, sticky=W, padx=4, pady=4)
+        spnY.grid(row=rowIdx, column=1, sticky=W, padx=4, pady=4)
 
         rowIdx += 1
         btnOK.grid(row=rowIdx, column=0, sticky=EW, padx=4, pady=4, columnspan=2)
 
         tooltips = {
-            chkAspectLock: "Maintain aspect ratio when adjusting width and height",
-            spnWidth: "Gif width in pixels",
-            spnHeight: "Gif height in pixels",
-            spnX: "Start coordinate X (horizontal)",
-            spnY: "Start coordinate Y (vertical)",
+            spnWidth: "Crop width in pixels",
+            spnHeight: "Crop height in pixels",
+            spnX: "Horizontal offset from left edge",
+            spnY: "Vertical offset from top edge",
             btnOK: "All done!",
         }
 
@@ -6644,10 +6384,9 @@ class GifApp:
         cropY.trace_add("write", OnCropChange)
         cropWidth.trace_add("write", OnCropChange)
         cropHeight.trace_add("write", OnCropChange)
-        aspectLock.trace_add("write", OnCropChange)
-
         OnCropChange(None)
-        return self.WaitForChildDialog(dlg)
+        dlg.bind("<Return>", lambda e: OnOK())
+        return self.WaitForChildDialog(dlg, focus_widget=spnWidth)
 
     # Bouncing Loop
     def OnForwardReverseLoop(self):
@@ -6772,233 +6511,6 @@ class GifApp:
         sclStartFrame.configure(command=OnSetFramePosition)
         sclEndFrame.configure(command=OnSetFramePosition)
 
-        return self.WaitForChildDialog(dlg)
-
-    #
-    def OnEditAudioSettings(self, parentDlg):
-        if self.gif is None:
-            return False
-
-        dlg = self.CreateChildDialog("Configure Audio", parent=parentDlg)
-
-        if dlg is None:
-            return False
-
-        audioChanged = True
-        lblPath = Label(dlg, font=self.defaultFont, text="Audio path")
-        txtPath = Entry(dlg, font=self.defaultFont, width=33)
-        btnChooseFile = Button(dlg, text="Load Audio", padx=4, pady=4, width=12, font=self.defaultFontTiny)
-
-        lblStart = Label(dlg, font=self.defaultFont, text="Start time")
-
-        timeValues = ["%02d" % (x) for x in range(0, 60)]
-        timeValues = " ".join(timeValues)
-
-        audioStartTimeMin = StringVar()
-        audioStartTimeSec = StringVar()
-        audioStartTimeMilli = StringVar()
-
-        spnAudioStartTimeMin = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=59,
-            values=timeValues,
-            increment=1,
-            width=self.guiConf["timeSpinboxWidth"],
-            textvariable=audioStartTimeMin,
-            validate=ALL,
-            wrap=True,
-            name="audioStartMin",
-            repeatdelay=250,
-            repeatinterval=35,
-            state="readonly",
-        )
-        lblAudioMinSep = Label(dlg, text=":")
-        spnAudioStartTimeSec = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=59,
-            values=timeValues,
-            increment=1,
-            width=self.guiConf["timeSpinboxWidth"],
-            textvariable=audioStartTimeSec,
-            validate=ALL,
-            wrap=True,
-            name="audioStartSec",
-            repeatdelay=250,
-            repeatinterval=35,
-            state="readonly",
-        )
-        lblAudioSecSep = Label(dlg, text=".")
-        spnAudioStartTimeMilli = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=9,
-            values="0 1 2 3 4 5 6 7 8 9",
-            increment=1,
-            width=self.guiConf["timeSpinboxWidth"],
-            textvariable=audioStartTimeMilli,
-            validate=ALL,
-            wrap=True,
-            name="audioStartMilli",
-            repeatdelay=200,
-            repeatinterval=100,
-            state="readonly",
-        )
-
-        lblVolume = Label(dlg, font=self.defaultFont, text="Volume %")
-        volume = IntVar()
-        spnVolume = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=300,
-            increment=1,
-            width=5,
-            textvariable=volume,
-            repeatdelay=300,
-            repeatinterval=15,
-            state="readonly",
-        )
-
-        btnPreview = Button(dlg, text="Play", padx=4, pady=4, width=12, font=self.defaultFontTiny)
-        btnOk = Button(dlg, text="OK", padx=4, pady=4)
-
-        # # Load default values
-        txtPath.insert(0, self.conf.GetParam("audio", "path"))
-        secs = float(self.conf.GetParam("audio", "startTime"))
-        h, m, s, ms = MillisecToDurationComponents(secs * 1000.0)
-        audioStartTimeMin.set("%02d" % m)
-        audioStartTimeSec.set("%02d" % s)
-        audioStartTimeMilli.set(ms / 100)
-        volume.set(int(self.conf.GetParam("audio", "volume")))
-
-        btnPreview.configure(state="disabled")
-
-        # Place elements on grid
-        rowIdx = -1
-
-        rowIdx += 1
-        lblPath.grid(row=rowIdx, column=0, sticky=W, padx=4, pady=4)
-        txtPath.grid(row=rowIdx, column=1, sticky=W, padx=4, pady=4, columnspan=5)
-        btnChooseFile.grid(row=rowIdx, column=6, sticky=EW, padx=4, pady=4)
-
-        rowIdx += 1
-        lblStart.grid(row=rowIdx, column=0, sticky=W, padx=4, pady=4)
-
-        spnAudioStartTimeMin.grid(row=rowIdx, column=1, sticky=W, padx=4, pady=4)
-        lblAudioMinSep.grid(row=rowIdx, column=2, sticky=W, padx=4, pady=4)
-        spnAudioStartTimeSec.grid(row=rowIdx, column=3, sticky=W, padx=4, pady=4)
-        lblAudioSecSep.grid(row=rowIdx, column=4, sticky=W, padx=4, pady=4)
-        spnAudioStartTimeMilli.grid(row=rowIdx, column=5, sticky=W, padx=4, pady=4)
-        btnPreview.grid(row=rowIdx, column=6, sticky=EW, padx=4, pady=4)
-
-        rowIdx += 1
-        lblVolume.grid(row=rowIdx, column=0, sticky=W, padx=4, pady=4)
-        spnVolume.grid(row=rowIdx, column=1, sticky=W, padx=4, pady=4, columnspan=2)
-
-        rowIdx += 1
-        btnOk.grid(row=rowIdx, column=0, sticky=EW, padx=4, pady=4, columnspan=7)
-
-        tooltips = {
-            btnChooseFile: "Click to start download of a URL, or to browse for a local file",
-            txtPath: "Hint: video URLs are supported in addition to local files",
-        }
-
-        for item, tipString in tooltips.items():
-            createToolTip(item, tipString)
-
-        def OnTimeChanged():
-            audioChanged = True
-            return True
-
-        def OnChooseFileClicked():
-            audioChanged = True
-
-            if IsUrl(txtPath.get()):
-                try:
-                    downloadedFileName = self.gif.DownloadAudio(txtPath.get())
-                except:
-                    self.Alert("Audio Download", "Failed to download audio file")
-                    return False
-
-                txtPath.delete(0, "end")
-                txtPath.insert(0, downloadedFileName)
-            else:
-                # They're selecting a file
-                audioPath = askopenfilename(
-                    parent=dlg,
-                    filetypes=[("Audio file", ("*.mp3", "*.aac", "*.wav", "*.ogg", "*.m4a"))],
-                )
-                txtPath.delete(0, END)
-                if audioPath is not None:
-                    txtPath.insert(0, audioPath)
-                PrepareAudio()
-
-            return True
-
-        def AudioFileExists():
-            return os.path.exists(txtPath.get())
-
-        def GetStartTime():
-            timeStart = float(spnAudioStartTimeMin.get()) * 60 + float(spnAudioStartTimeSec.get()) + float(spnAudioStartTimeMilli.get()) / 10.0
-            return timeStart
-
-        def PrepareAudio():
-            if len(txtPath.get()) == 0:
-                return False
-
-            if AudioFileExists():
-                self.audioChanges += self.conf.SetParam("audio", "path", txtPath.get())
-                self.audioChanges += self.conf.SetParam("audio", "startTime", str(GetStartTime()))
-                self.audioChanges += self.conf.SetParam("audio", "volume", str(volume.get()))
-
-                audioChanged = False
-                btnPreview.configure(state="normal")
-                return True
-            else:
-                self.Alert("Audio", "Can't find the audio file")
-                return False
-
-        def OnPlay():
-            if audioChanged:
-                if not PrepareAudio() or not self.gif.ExtractAudioClip():
-                    self.Alert("Audio", "Failed to extract clip from audio file")
-                    return False
-
-            AudioPlay(self.gif.GetAudioClipPath())
-            self.parent.update_idletasks()
-
-        def OnOkClicked():
-            closeDialog = False
-
-            if len(txtPath.get()) == 0:
-                closeDialog = True
-            elif PrepareAudio():
-                # Do it automatically
-                if self.gif.GetFinalOutputFormat() == "gif":
-                    self.ChangeFileFormat("mp4")
-
-                closeDialog = True
-            else:
-                self.Alert("Audio Problems", "Something is wrong with your audio settings")
-
-            # Should we close the audio dialog?
-            if closeDialog:
-                AudioPlay(None)
-                dlg.destroy()
-
-        btnChooseFile.configure(command=OnChooseFileClicked)
-        btnOk.configure(command=OnOkClicked)
-        btnPreview.configure(command=OnPlay)
-        spnAudioStartTimeMin.configure(command=OnTimeChanged)
-        spnAudioStartTimeSec.configure(command=OnTimeChanged)
-        spnAudioStartTimeMilli.configure(command=OnTimeChanged)
-
-        PrepareAudio()
         return self.WaitForChildDialog(dlg)
 
     # Edit mask
@@ -7208,7 +6720,6 @@ class GifApp:
             self.blurredAmount,
             self.isCinemagraph,
             self.invertCinemagraph,
-            self.isAudioEnabled,
         ]
 
         newFxHash = ""
@@ -7230,10 +6741,6 @@ class GifApp:
         else:
             return True
 
-    def HaveAudioPath(self):
-        audiofile = self.conf.GetParam("audio", "path")
-        return len(audiofile) and os.path.exists(audiofile)
-
     def OnEditEffects(self):
         self.fxHash = ""
 
@@ -7251,149 +6758,51 @@ class GifApp:
         else:
             cinemagraphState = "disabled"
 
-        if self.HaveAudioPath():
-            audioState = "normal"
-        else:
-            audioState = "disabled"
-
-        chkGrayScale = Checkbutton(dlg, text="Black & White", variable=self.isGrayScale)
-        chkSharpen = Checkbutton(dlg, text="Enhance", variable=self.isSharpened)
-        chkDesaturate = Checkbutton(dlg, text="Color Fade", variable=self.isDesaturated)
-        chkSepia = Checkbutton(dlg, text="Sepia Tone", variable=self.isSepia)
-        chkColorTint = Checkbutton(dlg, text="Colorize", variable=self.isColorTint)
-        chkEdgeFade = Checkbutton(dlg, text="Burnt Corners", variable=self.isFadedEdges)
-        chkBorder = Checkbutton(dlg, text="Border", variable=self.isBordered)
-        chkBlurred = Checkbutton(dlg, text="Blur", variable=self.isBlurred)
-        chkNashville = Checkbutton(dlg, text="Nashville", variable=self.isNashville)
-        chkCinemagraph = Checkbutton(dlg, text="Cinemagraph", variable=self.isCinemagraph, state=cinemagraphState)
-        chkCinemaInvert = Checkbutton(dlg, text="Invert", variable=self.invertCinemagraph, state=cinemagraphState)
-        chkSound = Checkbutton(dlg, text="Sound", variable=self.isAudioEnabled, state=audioState)
-
-        btnEditSound = Button(dlg, font=self.defaultFont, text="Configure...")
-        btnEditMask = Button(dlg, font=self.defaultFont, text="Configure...")
-
-        btnOK = Button(dlg, text="Done")
-
-        btnTintColor = Button(dlg, font=self.defaultFont, text="Color Picker")
-        btnBorderColor = Button(dlg, font=self.defaultFont, text="Color Picker")
-
         def OnSpin():
             # prevent events from queuing up
             dlg.update_idletasks()
 
         repeatRateMs = 1500
-        spnDesaturateAmount = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=100,
-            increment=10,
-            width=5,
-            textvariable=self.desaturatedAmount,
-            state="readonly",
-            wrap=True,
-            repeatdelay=300,
-            repeatinterval=repeatRateMs,
-            command=OnSpin,
-        )
-        spnSepiaAmount = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=100,
-            increment=10,
-            width=5,
-            textvariable=self.sepiaAmount,
-            state="readonly",
-            wrap=True,
-            repeatdelay=300,
-            repeatinterval=repeatRateMs,
-            command=OnSpin,
-        )
-        spnSharpenAmount = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=100,
-            increment=10,
-            width=5,
-            textvariable=self.sharpenedAmount,
-            state="readonly",
-            wrap=True,
-            repeatdelay=300,
-            repeatinterval=repeatRateMs,
-            command=OnSpin,
-        )
-        spnFadedEdgeAmount = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=100,
-            increment=10,
-            width=5,
-            textvariable=self.fadedEdgeAmount,
-            state="readonly",
-            wrap=True,
-            repeatdelay=300,
-            repeatinterval=repeatRateMs,
-            command=OnSpin,
-        )
-        spnColorTintAmount = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=100,
-            increment=10,
-            width=5,
-            textvariable=self.colorTintAmount,
-            state="readonly",
-            wrap=True,
-            repeatdelay=300,
-            repeatinterval=repeatRateMs,
-            command=OnSpin,
-        )
-        spnBorderAmount = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=100,
-            increment=10,
-            width=5,
-            textvariable=self.borderAmount,
-            state="readonly",
-            wrap=True,
-            repeatdelay=300,
-            repeatinterval=repeatRateMs,
-            command=OnSpin,
-        )
-        spnNashvilleAmount = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=100,
-            increment=10,
-            width=5,
-            textvariable=self.nashvilleAmount,
-            state="readonly",
-            wrap=True,
-            repeatdelay=300,
-            repeatinterval=repeatRateMs,
-            command=OnSpin,
-        )
-        spnBlurAmount = Spinbox(
-            dlg,
-            font=self.defaultFont,
-            from_=0,
-            to=100,
-            increment=10,
-            width=5,
-            textvariable=self.blurredAmount,
-            state="readonly",
-            wrap=True,
-            repeatdelay=300,
-            repeatinterval=repeatRateMs,
-            command=OnSpin,
-        )
+
+        def make_spinbox(var):
+            return Spinbox(
+                dlg, font=self.defaultFont, from_=0, to=100, increment=10, width=5, textvariable=var, state="readonly", wrap=True, repeatdelay=300, repeatinterval=repeatRateMs, command=OnSpin
+            )
+
+        # Created in visual order (top to bottom) so Tab order matches the layout
+        chkSharpen = Checkbutton(dlg, text="Enhance", variable=self.isSharpened)
+        spnSharpenAmount = make_spinbox(self.sharpenedAmount)
+
+        chkDesaturate = Checkbutton(dlg, text="Color Fade", variable=self.isDesaturated)
+        spnDesaturateAmount = make_spinbox(self.desaturatedAmount)
+
+        chkSepia = Checkbutton(dlg, text="Sepia Tone", variable=self.isSepia)
+        spnSepiaAmount = make_spinbox(self.sepiaAmount)
+
+        chkEdgeFade = Checkbutton(dlg, text="Burnt Corners", variable=self.isFadedEdges)
+        spnFadedEdgeAmount = make_spinbox(self.fadedEdgeAmount)
+
+        chkNashville = Checkbutton(dlg, text="Nashville", variable=self.isNashville)
+        spnNashvilleAmount = make_spinbox(self.nashvilleAmount)
+
+        chkColorTint = Checkbutton(dlg, text="Colorize", variable=self.isColorTint)
+        spnColorTintAmount = make_spinbox(self.colorTintAmount)
+        btnTintColor = Button(dlg, font=self.defaultFont, text="Color Picker")
+
+        chkBlurred = Checkbutton(dlg, text="Blur", variable=self.isBlurred)
+        spnBlurAmount = make_spinbox(self.blurredAmount)
+
+        chkBorder = Checkbutton(dlg, text="Border", variable=self.isBordered)
+        spnBorderAmount = make_spinbox(self.borderAmount)
+        btnBorderColor = Button(dlg, font=self.defaultFont, text="Color Picker")
+
+        chkGrayScale = Checkbutton(dlg, text="Black & White", variable=self.isGrayScale)
+
+        chkCinemagraph = Checkbutton(dlg, text="Cinemagraph", variable=self.isCinemagraph, state=cinemagraphState)
+        btnEditMask = Button(dlg, font=self.defaultFont, text="Configure...")
+        chkCinemaInvert = Checkbutton(dlg, text="Invert", variable=self.invertCinemagraph, state=cinemagraphState)
+
+        btnOK = Button(dlg, text="Done")
         rowIdx = -1
 
         rowIdx += 1
@@ -7444,10 +6853,6 @@ class GifApp:
         chkCinemaInvert.grid(row=rowIdx, column=3, sticky=W, padx=4, pady=1)
 
         rowIdx += 1
-        chkSound.grid(row=rowIdx, column=0, sticky=W, padx=4, pady=1)
-        btnEditSound.grid(row=rowIdx, column=2, sticky=W, padx=4, pady=1)
-
-        rowIdx += 1
         btnOK.grid(row=rowIdx, column=0, sticky=EW, padx=4, pady=4, columnspan=4)
 
         tooltips = {
@@ -7463,8 +6868,6 @@ class GifApp:
             chkCinemagraph: "Freeze the entire GIF except for regions which you define. Requires a mask setting",
             chkCinemaInvert: "Animate the regions that are NOT painted instead",
             btnEditMask: "Edit the areas you wish to stay animated.",
-            chkSound: "Enable sound. Requires you to choose a format that supports sound such as mp4, webm or mov.",
-            btnEditSound: "Pick your audio track and start time.",
         }
 
         for item, tipString in tooltips.items():
@@ -7474,23 +6877,6 @@ class GifApp:
             self.OnStopPreview(None)
             dlg.destroy()
             return True
-
-        def OnEditAudioClicked():
-            hadAudio = self.HaveAudioPath()
-            ret = self.OnEditAudioSettings(dlg)
-
-            self.ReModalDialog(dlg)
-
-            if self.HaveAudioPath():
-                if chkSound.cget("state") == "disabled":
-                    chkSound.configure(state="normal")
-                    if hadAudio == False:
-                        self.isAudioEnabled.set(1)
-            else:
-                chkSound.configure(state="disabled")
-
-            self.OnEffectsChange(None)
-            return ret
 
         def OnEditMaskClicked():
             hadMask = self.HaveMask()
@@ -7531,15 +6917,14 @@ class GifApp:
 
         dlg.protocol("WM_DELETE_WINDOW", OnOK)
         btnOK.configure(command=OnOK)
+        dlg.bind("<Return>", lambda e: OnOK())
         btnTintColor.configure(command=OnSelectTintColor)
         btnBorderColor.configure(command=OnSelectBorderColor)
         btnEditMask.configure(command=OnEditMaskClicked)
-        btnEditSound.configure(command=OnEditAudioClicked)
-
         if self.conf.GetParamBool("settings", "autoPreview"):
             self.OnShowPreview(None)
 
-        return self.WaitForChildDialog(dlg)
+        return self.WaitForChildDialog(dlg, focus_widget=chkSharpen)
 
     def OnCaptionConfig(self):
         """Caption configuration dialog."""
@@ -7604,15 +6989,21 @@ class GifApp:
         if captionDlg is None:
             return False
 
-        lblSample = Label(captionDlg, text="Sample")
-        lblFontPreview = Label(captionDlg, text="AaBbYyZz")
-        lblFontPreview["fg"] = self.OnCaptionConfigDefaults["defaultFontColor"]
-        lblFontPreview["bg"] = "#000000"
+        # Widget creation order matches visual layout (top-to-bottom,
+        # left-to-right) so that Tab traversal follows the grid.
 
+        # Row 0: Caption text
         lblCaption = Label(captionDlg, text="Caption")
         txtCaption = Text(captionDlg, font=self.defaultFont, width=45, height=3)
         txtCaption.bind("<Button-3>", self.OnRClickPopup)
-        txtCaption.focus()
+        txtCaption.bind("<Tab>", lambda e: (e.widget.tk_focusNext().focus_set(), "break")[-1])
+
+        # Row 1: Font family, size, color picker
+        lblFont = Label(captionDlg, text="Font")
+        fontFamily = StringVar()
+        cbxFontFamily = ttk.Combobox(captionDlg, textvariable=fontFamily, state="readonly", width=20)
+        cbxFontFamily["values"] = fonts.GetFamilyList()
+        cbxFontFamily.current(self.OnCaptionConfigDefaults["defaultFontIdx"])
 
         fontSize = StringVar()
         fontSizeValues = " ".join(["%dpt" % (x) for x in range(9, 72)])
@@ -7627,16 +7018,18 @@ class GifApp:
             textvariable=fontSize,
             repeatdelay=300,
             repeatinterval=60,
-        )  # font=self.defaultFont
+        )
         fontSize.set(self.OnCaptionConfigDefaults["defaultFontSize"])
 
-        lblFont = Label(captionDlg, text="Font")
-        fontFamily = StringVar()
-        cbxFontFamily = ttk.Combobox(captionDlg, textvariable=fontFamily, state="readonly", width=20)
+        btnCaptionFontColor = Button(captionDlg, font=self.defaultFont, text="Color Picker")
 
-        cbxFontFamily["values"] = fonts.GetFamilyList()
-        cbxFontFamily.current(self.OnCaptionConfigDefaults["defaultFontIdx"])
+        # Row 2: Sample/Preview (labels only — no tab stops)
+        lblSample = Label(captionDlg, text="Sample")
+        lblFontPreview = Label(captionDlg, text="AaBbYyZz")
+        lblFontPreview["fg"] = self.OnCaptionConfigDefaults["defaultFontColor"]
+        lblFontPreview["bg"] = "#000000"
 
+        # Row 3: Style
         fontStyle = StringVar()
         lblStyle = Label(captionDlg, font=self.defaultFont, text="Style")
         cbxStyle = ttk.Combobox(
@@ -7648,6 +7041,7 @@ class GifApp:
         )
         cbxStyle.current(self.OnCaptionConfigDefaults["defaultFontStyleIdx"])
 
+        # Row 4: Positioning
         positioning = StringVar()
         lblPosition = Label(captionDlg, font=self.defaultFont, text="Positioning")
         cbxPosition = ttk.Combobox(
@@ -7659,8 +7053,106 @@ class GifApp:
         )
         cbxPosition.current(self.OnCaptionConfigDefaults["defaultPosition"])
 
-        btnCaptionFontColor = Button(captionDlg, font=self.defaultFont, text="Color Picker")
+        # Row 5: Outline + Shadow
+        lblOutline = Label(captionDlg, font=self.defaultFont, text="Outline")
+        lblOutlineSize = Label(captionDlg, font=self.defaultFont, text="Size")
+        outlineThickness = IntVar()
+        spnCaptionFontOutlineSize = Spinbox(
+            captionDlg,
+            font=self.defaultFont,
+            from_=0,
+            to=15,
+            increment=1,
+            width=5,
+            textvariable=outlineThickness,
+            repeatdelay=300,
+            repeatinterval=60,
+            state="readonly",
+        )
+        outlineThickness.set(self.OnCaptionConfigDefaults["defaultFontOutlineThickness"])
 
+        dropShadow = IntVar()
+        chkdropShadow = Checkbutton(captionDlg, text="Shadow", variable=dropShadow)
+        dropShadow.set(self.OnCaptionConfigDefaults["defaultDropShadow"])
+
+        # Row 6: Opacity
+        lblOpacity = Label(captionDlg, font=self.defaultFont, text="Opacity")
+        opacity = IntVar()
+        spnOpacity = Spinbox(
+            captionDlg,
+            font=self.defaultFont,
+            from_=0,
+            to=100,
+            increment=1,
+            width=5,
+            textvariable=opacity,
+            repeatdelay=300,
+            repeatinterval=30,
+            state="readonly",
+            wrap=True,
+        )
+        opacity.set(self.OnCaptionConfigDefaults["defaultOpacity"])
+
+        # Row 7: Line Spacing
+        lblLineSpacing = Label(captionDlg, font=self.defaultFont, text="Line Space Adj.")
+        lineSpacing = IntVar()
+        spnSpacing = Spinbox(
+            captionDlg,
+            font=self.defaultFont,
+            from_=-200,
+            to=200,
+            increment=1,
+            width=5,
+            textvariable=lineSpacing,
+            repeatdelay=300,
+            repeatinterval=30,
+            state="readonly",
+        )
+        lineSpacing.set(self.OnCaptionConfigDefaults["defaultLineSpacing"])
+
+        # Row 8: Effects
+        lblFilters = Label(captionDlg, font=self.defaultFont, text="Effects")
+        applyFxToText = IntVar()
+        chkApplyFxToText = Checkbutton(captionDlg, text="Apply Filters", variable=applyFxToText)
+        applyFxToText.set(self.OnCaptionConfigDefaults["defaultApplyFxToText"])
+
+        # Row 9: Animation
+        lblAnimate = Label(captionDlg, font=self.defaultFont, text="Animation")
+        animateSetting = StringVar()
+        animationType = StringVar()
+
+        animValues = ["Off"]
+        for animType in (
+            "FadeIn",
+            "FadeOut",
+            "FadeInOut",
+            "Triangle",
+            "Sawtooth",
+            "Square",
+        ):
+            for animSpeed in ("Slow", "Medium", "Fast"):
+                animValues.append(animType + " " + animSpeed)
+        animValues.append("Random")
+
+        cbxAnimateType = ttk.Combobox(
+            captionDlg,
+            textvariable=animationType,
+            state="readonly",
+            width=15,
+            values=("Blink", "Left-Right", "Up-Down"),
+        )
+        cbxAnimateType.current(0)
+
+        cbxAnimate = ttk.Combobox(
+            captionDlg,
+            textvariable=animateSetting,
+            state="readonly",
+            width=15,
+            values=tuple(animValues),
+        )
+        cbxAnimate.current(0)
+
+        # Row 10-11: Frame sliders
         numFrames = self.gif.GetNumFrames()
         lblStartFrame = Label(captionDlg, font=self.defaultFont, text="Start Frame")
         sclStartFrame = Scale(
@@ -7693,103 +7185,7 @@ class GifApp:
         )
         sclEndFrame.set(numFrames)
 
-        animateSetting = StringVar()
-        animationType = StringVar()
-        lblAnimate = Label(captionDlg, font=self.defaultFont, text="Animation")
-
-        animValues = ["Off"]
-
-        for animType in (
-            "FadeIn",
-            "FadeOut",
-            "FadeInOut",
-            "Triangle",
-            "Sawtooth",
-            "Square",
-        ):
-            for animSpeed in ("Slow", "Medium", "Fast"):
-                animValues.append(animType + " " + animSpeed)
-
-        animValues.append("Random")
-
-        cbxAnimate = ttk.Combobox(
-            captionDlg,
-            textvariable=animateSetting,
-            state="readonly",
-            width=15,
-            values=tuple(animValues),
-        )
-        cbxAnimate.current(0)
-
-        cbxAnimateType = ttk.Combobox(
-            captionDlg,
-            textvariable=animationType,
-            state="readonly",
-            width=15,
-            values=("Blink", "Left-Right", "Up-Down"),
-        )
-        cbxAnimateType.current(0)
-
-        lblOutline = Label(captionDlg, font=self.defaultFont, text="Outline")
-        lblOutlineSize = Label(captionDlg, font=self.defaultFont, text="Size")
-
-        outlineThickness = IntVar()
-        spnCaptionFontOutlineSize = Spinbox(
-            captionDlg,
-            font=self.defaultFont,
-            from_=0,
-            to=15,
-            increment=1,
-            width=5,
-            textvariable=outlineThickness,
-            repeatdelay=300,
-            repeatinterval=60,
-            state="readonly",
-        )
-        outlineThickness.set(self.OnCaptionConfigDefaults["defaultFontOutlineThickness"])
-
-        dropShadow = IntVar()
-        chkdropShadow = Checkbutton(captionDlg, text="Shadow", variable=dropShadow)
-        dropShadow.set(self.OnCaptionConfigDefaults["defaultDropShadow"])
-
-        lblFilters = Label(captionDlg, font=self.defaultFont, text="Effects")
-        applyFxToText = IntVar()
-        chkApplyFxToText = Checkbutton(captionDlg, text="Apply Filters", variable=applyFxToText)
-        applyFxToText.set(self.OnCaptionConfigDefaults["defaultApplyFxToText"])
-
-        lblOpacity = Label(captionDlg, font=self.defaultFont, text="Opacity")
-        opacity = IntVar()
-        spnOpacity = Spinbox(
-            captionDlg,
-            font=self.defaultFont,
-            from_=0,
-            to=100,
-            increment=1,
-            width=5,
-            textvariable=opacity,
-            repeatdelay=300,
-            repeatinterval=30,
-            state="readonly",
-            wrap=True,
-        )
-        opacity.set(self.OnCaptionConfigDefaults["defaultOpacity"])
-
-        lblLineSpacing = Label(captionDlg, font=self.defaultFont, text="Line Space Adj.")
-        lineSpacing = IntVar()
-        spnSpacing = Spinbox(
-            captionDlg,
-            font=self.defaultFont,
-            from_=-200,
-            to=200,
-            increment=1,
-            width=5,
-            textvariable=lineSpacing,
-            repeatdelay=300,
-            repeatinterval=30,
-            state="readonly",
-        )
-        lineSpacing.set(self.OnCaptionConfigDefaults["defaultLineSpacing"])
-
+        # Row 12: Done button
         btnOk = Button(captionDlg, text="Done", padx=4, pady=4)
 
         # Place items on grid
@@ -8007,6 +7403,10 @@ class GifApp:
         sclEndFrame.configure(command=OnSetFramePosition)
         btnOk.configure(command=OnSaveCaption)
         btnCaptionFontColor.configure(command=OnSelectCaptionColor)
+        # Cmd+Return saves the caption from any widget in the dialog.
+        # The Text widget binding also returns "break" to prevent a newline.
+        captionDlg.bind("<Command-Return>", lambda e: OnSaveCaption())
+        txtCaption.bind("<Command-Return>", lambda e: (OnSaveCaption(), "break")[-1])
 
         applyFxToText.trace_add("write", OnFontUpdate)
         dropShadow.trace_add("write", OnFontUpdate)
@@ -8045,74 +7445,71 @@ class GifApp:
 
         self.parent.update_idletasks()
 
-        return self.WaitForChildDialog(captionDlg)
+        return self.WaitForChildDialog(captionDlg, focus_widget=txtCaption)
 
 
 class ToolTip(object):
     """Tool tips shown on mouse-over."""
 
+    SHOW_DELAY_MS = 400
+
     def __init__(self, widget):
         self.widget = widget
         self.tipwindow = None
-        self.id = None
+        self._after_id = None
         self.x = self.y = 0
 
-    def showtip(self, text):
-        "Display text in tooltip window"
+    def _schedule(self, text):
         self.text = text
+        self._cancel()
+        self._after_id = self.widget.after(self.SHOW_DELAY_MS, self._show)
+
+    def _cancel(self):
+        if self._after_id:
+            self.widget.after_cancel(self._after_id)
+            self._after_id = None
+
+    def _show(self):
+        self._after_id = None
         if self.tipwindow or not self.text:
             return
 
         bboxVals = self.widget.bbox("insert")
 
         if bboxVals is None:
-            logging.error("Failed to display tooltip: " + text)
+            logging.error("Failed to display tooltip: " + self.text)
             return False
 
         if len(bboxVals) == 4:
-            x, y, cx, cy = bboxVals
+            x, y, _, cy = bboxVals
         else:
-            x, y, cx, cy = [int(n) for n in bboxVals.split()]
+            x, y, _, cy = [int(n) for n in bboxVals.split()]
 
         # Set the X and Y offset
         x = x + self.widget.winfo_rootx() + 15
         y = y + cy + self.widget.winfo_rooty() + 50
 
         self.tipwindow = tw = Toplevel(self.widget)
-        # tw.wm_attributes('-alpha', 0.6)
         tw.wm_overrideredirect(1)
         tw.wm_geometry("+%d+%d" % (x, y))
-        try:
-            # For Mac OS
-            tw.tk.call(
-                "::tk::unsupported::MacWindowStyle",
-                "style",
-                tw._w,
-                "help",
-                "noActivates",
-            )
-        except TclError:
-            pass
 
-        # tw.withdraw()
-
+        # Draw our own border frame for sharp 90-degree corners
+        tw.configure(background="#000000")
         label = Label(
             tw,
             text=self.text,
             justify=LEFT,
-            background="#333333",
-            foreground="#ffffff",
-            relief=SOLID,
-            borderwidth=1,
+            background="#ffffe1",
+            foreground="#000000",
+            relief=FLAT,
+            borderwidth=0,
             font=("tahoma", "10", "normal"),
             wraplength=300,
         )
-        label.pack(ipadx=14, ipady=10)
-
-    def makevisable(self):
-        self.tipwindow.deiconify()
+        label.pack(ipadx=14, ipady=10, padx=1, pady=1)
 
     def hidetip(self):
+        self._cancel()
         tw = self.tipwindow
         self.tipwindow = None
         if tw:
@@ -8126,8 +7523,7 @@ def createToolTip(widget, text):
     toolTip = ToolTip(widget)
 
     def enter(event):
-        toolTip.showtip(text)
-        # toolTip.tipwindow.after(400, toolTip.makevisable())
+        toolTip._schedule(text)
 
     def leave(event):
         toolTip.hidetip()
@@ -8178,24 +7574,22 @@ class InstaCommandLine:
     """CLI batch mode: python3 main.py video.mp4 [-o output.gif]"""
 
     def __init__(self):
-        if len(sys.argv) <= 1:
-            self.batchMode = False
-            return
-
         parser = argparse.ArgumentParser(
             prog="instagiffer",
             description="Instagiffer %s — GIF creator" % INSTAGIFFER_VERSION,
         )
-        parser.add_argument("video", help="Path to local video file or URL")
+        parser.add_argument("video", nargs="?", help="Path to local video file or URL")
         parser.add_argument("-o", "--output", help="Output GIF path (default: ~/Desktop/insta.gif)")
+        parser.add_argument("--config", default="instagiffer.conf", help="Path to config file")
         args = parser.parse_args()
-        self.videoFileName = args.video
-        self.outputPath = args.output
-        self.batchMode = True
+        self.configPath = args.config
+        self.batchMode = args.video is not None
+        if self.batchMode:
+            self.videoFileName = args.video
+            self.outputPath = args.output
 
     def run(self):
-        binPath = os.path.dirname(os.path.realpath(sys.argv[0]))
-        conf = InstaConfig(binPath + os.sep + "instagiffer.conf")
+        conf = InstaConfig(self.configPath)
         if self.outputPath:
             conf.SetParam("paths", "gifOutputPath", os.path.abspath(self.outputPath))
 
@@ -8278,7 +7672,7 @@ def main():
     logging.info("App: %s, Home: %s", exeDir, expanduser("~"))
 
     root = Tk()
-    app = GifApp(root, None)
+    app = GifApp(root, None, configPath=cmdline.configPath)
 
     root.mainloop()
 

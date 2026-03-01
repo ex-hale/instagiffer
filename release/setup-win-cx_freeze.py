@@ -43,7 +43,7 @@ elif sys.platform == "win32":
     base = "Win32GUI"
 
     DATA_FILES = [
-        "uninstall.ico",
+        "release/uninstall.ico",
         "instagiffer.ico",
         "instagiffer.conf",
         "deps/win/",
