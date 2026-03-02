@@ -48,13 +48,13 @@ def assert_valid_gif(path):
 
 @requires_macos
 @requires_test_video
-def test_load_video_and_create_gif():
-    """Full smoke test: load video, crop, enable all effects, add caption, create GIF, verify output."""
+def test_full_smoke(app_package):
+    """Full smoke test: load video, create GIF with all options, verify output, generate bug report."""
     video = os.path.join(TEST_DIR, "test_video_1.mp4")
 
-    with InstagifferAutomator.launch(config_overrides={"color": {"numColors": "128"}}) as app:
+    with InstagifferAutomator.launch(app_package=app_package, config_overrides={"color": {"numColors": "128"}}) as app:
         # Verify app started successfully
-        app.assert_log_contains(r"Starting Instagiffer")
+        app.assert_log_contains(r"Instagiffer: \d+\.\d+\.\d+")
 
         # Load a video
         app.load_video(video)
@@ -75,12 +75,22 @@ def test_load_video_and_create_gif():
         # Close the GIF preview dialog
         app.close_preview()
 
+        # Help > Generate Bug Report should open the log file, not an error dialog
+        assert os.path.isfile(app.log_path), f"Log file not found at {app.log_path}"
+        app.click_menu("Help", "Generate Bug Report")
+        time.sleep(1)
+        names = app.get_window_names()
+        assert not any("Bug Report" in n for n in names), f"Bug Report window not found. Windows: {names}"
+
+        # Close the log viewer window opened by the default app
+        app.close_frontmost_window()
+
 
 # CLI tests
 
 
 @requires_test_video
-@pytest.mark.parametrize("video", TEST_VIDEOS, ids=lambda p: os.path.basename(p))
+@pytest.mark.parametrize("video", TEST_VIDEOS, ids=os.path.basename)
 def disabled_test_cli_creates_gif(video):
     """CLI batch mode produces a valid GIF file from a local video."""
     name = os.path.splitext(os.path.basename(video))[0]

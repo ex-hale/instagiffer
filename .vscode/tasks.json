@@ -34,18 +34,10 @@
             "problemMatcher": []
         },
         {
-            "label": "Build Mac App",
+            "label": "Dist",
             "type": "shell",
             "command": "make",
-            "args": ["mac_app"],
-            "group": "build",
-            "problemMatcher": []
-        },
-        {
-            "label": "Build Mac Release",
-            "type": "shell",
-            "command": "make",
-            "args": ["mac_release"],
+            "args": ["dist"],
             "group": "build",
             "problemMatcher": []
         },

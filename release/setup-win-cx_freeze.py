@@ -5,7 +5,7 @@ import sys
 from cx_Freeze import setup, Executable
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from instagiffer import INSTAGIFFER_VERSION, INSTAGIFFER_PRERELEASE
+from instagiffer import __version__
 
 __author__ = "Justin Todd"
 __email__ = "instagiffer@gmail.com"
@@ -56,7 +56,7 @@ options = {
 
 setup(
     name=application_title,
-    version=INSTAGIFFER_VERSION,
+    version=__version__,
     description="Instagiffer - Animated GIF creator",
     url="http://www.instagiffer.com",
     author=__author__,

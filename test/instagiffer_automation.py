@@ -11,10 +11,14 @@ import configparser
 import os
 import re
 import subprocess
+import sys
 import tempfile
 import time
 
 _PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _PROJECT_DIR)
+from instagiffer import GetAppSupportDir, GetLogPath
+
 _TEST_DATA_DIR = os.path.join(_PROJECT_DIR, "test", "test_data")
 
 
@@ -47,12 +51,13 @@ def applescript(script, timeout=10):
 class InstagifferAutomator:
     """Drive Instagiffer's GUI via macOS System Events."""
 
-    def __init__(self, process=None, process_name="Python", app_title="Instagiffer", launch_cmd=None, working_dir=None, startup_timeout=8.0, poll_interval=0.1):
+    def __init__(self, process=None, process_name="Python", app_title="Instagiffer", launch_cmd=None, working_dir=None, log_path=None, startup_timeout=8.0, poll_interval=0.1):
         self.process = process
         self.process_name = process_name
         self.app_title = app_title
-        self.launch_cmd = launch_cmd or ["python3", "main.py"]
+        self.launch_cmd = launch_cmd or ["python3", "main.py", "--debug"]
         self.working_dir = working_dir or _PROJECT_DIR
+        self.log_path = log_path or GetLogPath()
         self.startup_timeout = startup_timeout
         self.poll_interval = poll_interval
 
@@ -73,12 +78,19 @@ class InstagifferAutomator:
     # -- Lifecycle --
 
     @classmethod
-    def launch(cls, config_overrides=None, **kwargs):
+    def launch(cls, app_package=None, config_overrides=None, **kwargs):
         """Launch Instagiffer, wait for the main window, and activate it.
 
+        Pass app_package to test a frozen .app bundle instead of the dev source.
         Pass config_overrides to modify settings from the default config,
         e.g. {"color": {"numColors": "128"}}.
         """
+        if app_package:
+            binary = os.path.join(app_package, "Contents", "MacOS", "Instagiffer")
+            frozen_log = os.path.join(GetAppSupportDir(), "logs", "instagiffer-event.log")
+            kwargs.setdefault("process_name", "Instagiffer")
+            kwargs.setdefault("launch_cmd", [binary])
+            kwargs.setdefault("log_path", frozen_log)
         instance = cls(**kwargs)
         if config_overrides:
             instance._apply_config_overrides(config_overrides)
@@ -90,8 +102,6 @@ class InstagifferAutomator:
     @staticmethod
     def run_cli(video, output, timeout=120):
         """Run Instagiffer in CLI batch mode. Returns the CompletedProcess."""
-        import sys
-
         return subprocess.run(
             [sys.executable, "main.py", video, "-o", output],
             cwd=_PROJECT_DIR,
@@ -125,7 +135,7 @@ class InstagifferAutomator:
             self.process.wait(timeout=2)
 
     def quit_via_menu(self):
-        self._tell(f'click menu item "Quit Python" of menu "{self.process_name}" of menu bar 1')
+        self._tell(f'click menu item "Quit {self.process_name}" of menu "{self.process_name}" of menu bar 1')
 
     def activate(self):
         """Bring the app window to the front."""
@@ -237,7 +247,7 @@ class InstagifferAutomator:
         return output_path
 
     def read_event_log(self):
-        log_path = os.path.join(self.working_dir, "instagiffer-event.log")
+        log_path = self.log_path
         if not os.path.exists(log_path):
             return ""
         with open(log_path, encoding="utf-8") as f:
@@ -384,7 +394,7 @@ class InstagifferAutomator:
         """
         self.activate()
         self.send_keystroke("k", ["command down"])  # Cmd+K opens Manual Crop
-        self.wait_for_window("Crop Settings")
+        self.wait_for_window("Crop")
         self.activate()
         TAB = 48
         UP = 126
@@ -408,6 +418,10 @@ class InstagifferAutomator:
         """Close the current modal dialog by pressing Return."""
         self.activate()
         self.send_key_code(36)  # Return
+
+    def close_frontmost_window(self):
+        """Close the frontmost window of whatever app is currently active (e.g. a log viewer)."""
+        applescript('tell application "System Events" to keystroke "w" using command down')
 
     def quit(self, timeout=5):
         """Quit via File > Exit menu and wait for the process to exit."""

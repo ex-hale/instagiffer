@@ -64,7 +64,8 @@ $(OUT)/magick: $(STAMPS)/imagemagick
 	@mkdir -p $(OUT)/etc/fonts
 	@cp $(PREFIX)/bin/magick $(OUT)/magick
 	@cp $(PREFIX)/etc/fonts/fonts.conf $(PREFIX)/etc/fonts/local.conf $(OUT)/etc/fonts/
-	@[ -d $(PREFIX)/etc/fonts/conf.d ] && cp -R $(PREFIX)/etc/fonts/conf.d $(OUT)/etc/fonts/ || true
+	@[ -d $(PREFIX)/etc/fonts/conf.d ] && cp -RL $(PREFIX)/etc/fonts/conf.d $(OUT)/etc/fonts/ || true
+	@sed -i '' 's|<cachedir>.*prefix.*</cachedir>|<cachedir>~/.cache/fontconfig</cachedir>|' $(OUT)/etc/fonts/fonts.conf
 
 clean:
 	rm -rf $(BUILD)

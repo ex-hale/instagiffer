@@ -29,7 +29,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["setuptools", "pytest", "pylint", "black"]
-build-mac = ["py2app"]
+build-mac = ["pyinstaller"]
 build-win = ["cx_Freeze"]
 
 [project.urls]
@@ -43,13 +43,11 @@ instagiffer = "instagiffer:main"
 py-modules = ["instagiffer"]
 
 [tool.setuptools.dynamic]
-version = {attr = "instagiffer.INSTAGIFFER_VERSION"}
+version = {attr = "instagiffer.__version__"}
 
 [tool.black]
 line-length = 200
 
-[tool.pytest.ini_options]
-testpaths = ["test"]
 
 [tool.pylint."messages control"]
 disable = [
@@ -57,7 +55,7 @@ disable = [
     "E0401", "E1101",
     "C0103", "C0415", "W0614", "C0116", "C0115", "C0209", "C0301", "C0413",
     "C0412", "C0302", "C0121", "C0123", "C0200", "C0325", "C1802",
-    "R0205", "R0902", "R0904", "R0912", "R0913", "R0914", "R0915", "R0916",
+    "R0205", "R0903", "R0902", "R0904", "R0912", "R0913", "R0914", "R0915", "R0916",
     "R0917",
     "R1701", "R1703", "R1704", "R1705", "R1710", "R1714", "R1716", "R1721",
     "R1730", "R1731", "R1732", "R1734", "R1735",

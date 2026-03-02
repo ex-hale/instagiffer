@@ -2,32 +2,29 @@ VENV := .venv
 PYTHON := $(VENV)/bin/python3
 PIP := $(VENV)/bin/pip
 
-VERSION := $(shell python3 -c "print(next(l.split('\"')[1] for l in open('instagiffer.py') if l.startswith('INSTAGIFFER_VERSION')))")
-PRERELEASE := $(shell python3 -c "print(next(l.split('\"')[1] for l in open('instagiffer.py') if l.startswith('INSTAGIFFER_PRERELEASE')))")
+VERSION := $(shell python3 -c "import instagiffer; print(instagiffer.__version__)")
 
-TEST_VIDEO_URLS := https://www.youtube.com/watch?v=aqz-KE-bpKQ https://www.youtube.com/watch?v=L_uXZEkhlZU
+TEST_VIDEO_URLS := \
+	https://www.youtube.com/watch?v=aqz-KE-bpKQ \
+	https://www.youtube.com/watch?v=L_uXZEkhlZU
 
-MAC_APP_PATH   := dist/Instagiffer.app
-MAC_MAGICK_OUT := build/imagemagick/out
-MAC_FFMPEG_URL := https://evermeet.cx/ffmpeg/getrelease/zip
-MAC_YTDLP_URL  := https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
+.PHONY: init run test test-app test-videos lint format clean deps dist install uninstall
 
-.PHONY: setup test test-videos lint format run clean \
-        mac_deps mac_deps_clean \
-        mac_app mac_dmg mac_pkg mac_release \
-        win_exe win_installer win_portable win_release
-
-clean:
-	rm -rf $(VENV) __pycache__ test/__pycache__ .pytest_cache *.egg-info instagiffer-event.log
-	rm -rf dist/ build/ deps/ *.pyc *.dmg *.pkg
-	rm -rf test/test_data/
-
-setup: $(VENV)/bin/activate mac_deps
+init: $(VENV)/bin/activate
 
 $(VENV)/bin/activate: pyproject.toml
 	python3 -m venv $(VENV)
 	$(PIP) install -e ".[dev]"
 	@echo "\nDone. Activate with: source $(VENV)/bin/activate"
+
+run: init
+	$(PYTHON) main.py
+
+lint: init
+	$(PYTHON) -m pylint instagiffer.py main.py test/test_instagiffer.py test/instagiffer_automation.py test/conftest.py
+
+format: init
+	$(PYTHON) -m black instagiffer.py main.py test/test_instagiffer.py test/instagiffer_automation.py test/conftest.py
 
 test-videos:
 	@mkdir -p test/test_data
@@ -38,90 +35,76 @@ test-videos:
 		i=$$((i + 1)); \
 	done
 
-test: setup test-videos
-	@rm -f test/test_data/*.gif
-	$(PYTHON) -m pytest test/test_instagiffer.py -v --tb=short
+test: init format lint test-videos
+	$(PYTHON) -m pytest
 
-lint: setup
-	$(PYTHON) -m pylint instagiffer.py main.py test/test_instagiffer.py test/instagiffer_automation.py
+test-app: install test-videos
+	$(PYTHON) -m pytest --app-package=$(INSTALL_PATH)
 
-format: setup
-	$(PYTHON) -m black instagiffer.py main.py test/test_instagiffer.py test/instagiffer_automation.py
+clean:
+	rm -rf $(VENV) __pycache__ test/__pycache__ .pytest_cache *.egg-info instagiffer-event.log
+	rm -rf dist/ build/ deps/ *.pyc
+	rm -rf test/test_data/
 
-run: setup
-	$(PYTHON) main.py
+ifeq ($(shell uname -s),Darwin)
 
-# macOS dependencies
+APP_PATH     := dist/Instagiffer.app
+INSTALL_PATH := /Applications/Instagiffer.app
+MAGICK_OUT   := build/imagemagick/out
+FFMPEG_URL   := https://evermeet.cx/ffmpeg/getrelease/zip
+YTDLP_URL    := https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
 
-mac_deps:
-	@command -v brew >/dev/null || (echo "Error: Homebrew required — https://brew.sh" && exit 1)
-	@for pkg in pkg-config cmake gperf gifsicle; do \
+deps: init
+	@command -v brew >/dev/null || (echo "Error: Homebrew is required. See https://brew.sh" && exit 1)
+	@for pkg in python3 python-tk pkg-config cmake gperf gifsicle create-dmg; do \
 		brew list $$pkg >/dev/null 2>&1 || brew install $$pkg; \
 	done
+	$(PIP) install -e ".[build-mac]"
 	$(MAKE) -f imagemagick.mk
 	@mkdir -p deps/mac
-	@cp -R $(MAC_MAGICK_OUT)/* deps/mac/
-	@[ -f deps/mac/ffmpeg ]   || (curl -fSL -o deps/mac/ffmpeg.zip "$(MAC_FFMPEG_URL)" && unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip && chmod +x deps/mac/ffmpeg)
-	@[ -f deps/mac/yt-dlp ]   || (curl -fSL -o deps/mac/yt-dlp "$(MAC_YTDLP_URL)" && chmod +x deps/mac/yt-dlp)
+	@cp -R $(MAGICK_OUT)/* deps/mac/
+	@[ -f deps/mac/ffmpeg ]   || (curl -fSL -o deps/mac/ffmpeg.zip "$(FFMPEG_URL)" && unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip && chmod +x deps/mac/ffmpeg)
+	@[ -f deps/mac/yt-dlp ]   || (curl -fSL -o deps/mac/yt-dlp "$(YTDLP_URL)" && chmod +x deps/mac/yt-dlp)
 	@[ -f deps/mac/gifsicle ] || cp "$$(which gifsicle)" deps/mac/gifsicle
 	@echo "macOS dependencies ready in deps/mac/"
 
-mac_deps_clean:
-	$(MAKE) -f imagemagick.mk clean
-	rm -rf deps/mac
+$(APP_PATH): init
+	@echo "Building Mac release with PyInstaller"
+	$(PYTHON) -m PyInstaller release/Instagiffer.spec --distpath dist --workpath build/pyinstaller --noconfirm
+	codesign --force --deep --sign - $(APP_PATH)
 
-# macOS release build (py2app)
+dist: $(APP_PATH)
+	@rm -f dist/Instagiffer-$(VERSION).dmg
+	create-dmg \
+		--volname "Instagiffer" \
+		--volicon "instagiffer.icns" \
+		--background "assets/dmg_background.png" \
+		--window-pos 200 120 \
+		--window-size 640 480 \
+		--icon-size 140 \
+		--icon "Instagiffer.app" 120 160 \
+		--app-drop-link 520 160 \
+		--no-internet-enable \
+		--hdiutil-quiet \
+		"dist/Instagiffer-$(VERSION).dmg" \
+		"$(APP_PATH)"
+	@SIZE=$$(stat -f%z "dist/Instagiffer-$(VERSION).dmg"); echo "Built dist/Instagiffer-$(VERSION).dmg ($$(( SIZE / 1048576 ))MB)"
 
-mac_app: setup
-	$(PYTHON) -m compileall instagiffer.py
-	@echo "Building Mac release with py2app"
-	$(PYTHON) release/setup-mac-py2app.py py2app
+install: $(APP_PATH)
+	@rm -rf $(INSTALL_PATH)
+	cp -R $(APP_PATH) $(INSTALL_PATH)
+	@echo "Installed to $(INSTALL_PATH)"
 
-mac_dmg: mac_app
-	@echo "Building DMG installer (v$(VERSION)$(PRERELEASE))"
-	rm -f Instagiffer-$(VERSION)$(PRERELEASE).sparseimage Instagiffer-$(VERSION)$(PRERELEASE).dmg
-	cp Instagiffer.sparseimage Instagiffer-$(VERSION)$(PRERELEASE).sparseimage
-	hdiutil attach Instagiffer-$(VERSION)$(PRERELEASE).sparseimage
-	cp -a $(MAC_APP_PATH) /Volumes/Instagiffer/
-	@echo "Position the icon, then press Enter..."
-	@read _unused
-	hdiutil detach /Volumes/Instagiffer
-	hdiutil convert Instagiffer-$(VERSION)$(PRERELEASE).sparseimage \
-		-format UDZO -o Instagiffer-$(VERSION)$(PRERELEASE).dmg -imagekey zlib-level=9
-	rm Instagiffer-$(VERSION)$(PRERELEASE).sparseimage
+else ifeq ($(OS),Windows_NT)
 
-mac_pkg: mac_app
-	productbuild --component $(MAC_APP_PATH) /Applications Instagiffer-$(VERSION)$(PRERELEASE).pkg
+deps:
+	@echo "Windows deps: place binaries in deps/win/ manually (see README)"
 
-mac_release: mac_dmg mac_pkg
-	@echo "Built Instagiffer-$(VERSION)$(PRERELEASE).dmg and .pkg"
-
-# ---------------------------------------------------------------------------
-# Windows release build (cx_Freeze + Inno Setup)
-# ---------------------------------------------------------------------------
-
-win_exe:
-	rd /S /Q build 2>NUL || true
+dist: init deps format lint test
 	python release/setup-win-cx_freeze.py build
-	rmdir /S /Q build\exe.win32-2.7\tk\demos 2>NUL || true
-
-win_installer: win_exe
 	del instagiffer*setup.exe 2>NUL || true
 	"C:\Program Files (x86)\Inno Setup 5\ISCC.exe" release/installer.iss \
-		/dMyAppVersion=$(VERSION)$(PRERELEASE)
+		/dMyAppVersion=$(VERSION)
+	@echo "Built instagiffer-$(VERSION)-setup.exe"
 
-win_portable: win_installer
-	"C:\Program Files (x86)\Instagiffer\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES || true
-	instagiffer-$(VERSION)$(PRERELEASE)-setup.exe /SP- /SILENT /SUPPRESSMSGBOXES
-	xcopy /Y /I /S "C:\Program Files (x86)\Instagiffer" instagiffer-$(VERSION)$(PRERELEASE)
-	del .\instagiffer-$(VERSION)$(PRERELEASE)\unins*
-	copy /Y instagiffer-event.log .\instagiffer-$(VERSION)$(PRERELEASE)
-	"C:\Program Files\7-Zip\7z.exe" a -tzip \
-		instagiffer-$(VERSION)$(PRERELEASE)-portable.zip \
-		instagiffer-$(VERSION)$(PRERELEASE)
-	rmdir /S /Q instagiffer-$(VERSION)$(PRERELEASE)
-
-win_release: win_installer win_portable
-	@echo "Built installer and portable zip for v$(VERSION)$(PRERELEASE)"
-
-
+endif

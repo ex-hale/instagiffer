@@ -33,18 +33,13 @@
 
 """instagiffer.py: The easy way to make GIFs"""
 
-# Only use odd-numbered minor revisions for pre-release builds
-INSTAGIFFER_VERSION = "1.77"
-# If not a pre-release set to "", else set to "pre-X"
-INSTAGIFFER_PRERELEASE = ""
-
+__version__ = "1.78.0"
 __author__ = "Justin Todd"
 __copyright__ = "Copyright 2013-2026, Exhale Software Inc."
 __maintainer__ = "Justin Todd"
 __email__ = "instagiffer@gmail.com"
 __status__ = "Production"
-__version__ = INSTAGIFFER_VERSION + INSTAGIFFER_PRERELEASE
-__release__ = False  # If this is false, bindep output, and info-level statements will be displayed stdout
+debug_mode = False  # Set via --debug CLI flag; enables verbose stdout logging and debug UI
 __changelogUrl__ = "https://github.com/ex-hale/instagiffer/releases"
 __faqUrl__ = "https://github.com/ex-hale/instagiffer#faq"
 
@@ -102,11 +97,10 @@ def ImAPC():
     return sys.platform == "win32"
 
 
-
 def OpenFileWithDefaultApp(fileName):
     """Open a file in the application associated with this file extension"""
     if sys.platform == "darwin":
-        os.system("open " + fileName)
+        subprocess.Popen(["open", fileName])
     else:
         try:
             os.startfile(fileName)
@@ -131,7 +125,6 @@ def GetFileExtension(filename):
     return fext
 
 
-
 def IsPictureFile(fileName):
     return GetFileExtension(fileName) in ["jpeg", "jpg", "png", "bmp", "tif"]
 
@@ -141,8 +134,28 @@ def IsUrl(s):
     return urlPatterns.match(s)
 
 
+def GetAppSupportDir():
+    """Return a writable, user-specific directory for Instagiffer data.
+    macOS: ~/Library/Application Support/Instagiffer
+    Windows: ~/.instagiffer
+    """
+    if ImAMac():
+        return os.path.join(expanduser("~"), "Library", "Application Support", "Instagiffer")
+    return os.path.join(expanduser("~"), ".instagiffer")
+
+
+def IsAppFrozen():
+    """Return True when running from a PyInstaller or cx_Freeze bundle."""
+    return getattr(sys, "frozen", False)
+
+
 def GetLogPath():
-    return os.path.dirname(os.path.realpath(sys.argv[0])) + os.sep + "instagiffer-event.log"
+    if IsAppFrozen():
+        log_dir = os.path.join(GetAppSupportDir(), "logs")
+    else:
+        log_dir = os.path.dirname(os.path.realpath(__file__))
+    os.makedirs(log_dir, exist_ok=True)
+    return os.path.join(log_dir, "instagiffer-event.log")
 
 
 def CleanupPath(path):
@@ -299,7 +312,7 @@ def RunProcess(
     outputTranslator=DefaultOutputHandler,
 ):
     """Run a process"""
-    if not __release__:
+    if debug_mode:
         logging.info("RunProcess: %s", str(cmd)[:200])
 
     env = os.environ.copy()
@@ -408,7 +421,7 @@ def RunProcess(
     stderr += remainingStderr
 
     # Logging
-    if not __release__:
+    if debug_mode:
         logging.info("return:  " + str(success))
         logging.info("stdout:  " + stdout)
         logging.error("stderr: " + stderr)
@@ -429,10 +442,7 @@ def CreateWorkingDir(conf):
 
     # No temp dir configured
     if tempDir == None or tempDir == "":
-        if ImAMac():
-            tempDir = os.path.join(expanduser("~"), "Library", "Application Support", "Instagiffer")
-        else:
-            tempDir = os.path.join(expanduser("~"), ".instagiffer", "working")
+        tempDir = os.path.join(GetAppSupportDir(), "working")
 
     # Pre-emptive detection and correction of language issues
     try:
@@ -632,7 +642,7 @@ class ImagemagickFont:
                 fontId.encode("ascii")
                 fontFile.encode("ascii")
             except UnicodeEncodeError:
-                logging.error("Unable to load font: " + fontFamily)
+                logging.debug("Unable to load font: " + fontFamily)
                 continue
 
             # ignore stretched fonts, and styles other than italic, and weights we don't know about
@@ -761,7 +771,6 @@ class AnimatedGif:
                 self.FatalError("Failed to create working directory: " + self.maskDir)
 
         self.LoadFonts()
-        logging.info("RETURNED FROM LoadFonts to __init__")
         logging.info("CheckPaths...")
         self.CheckPaths()
         logging.info("CheckPaths done. Cleaning up working dirs...")
@@ -1834,7 +1843,7 @@ class AnimatedGif:
             # -i:  video path
             # -r:  frame rate
 
-            if not __release__:
+            if debug_mode:
                 verbosityLevel = "verbose"
             else:
                 verbosityLevel = "verbose"  # error"
@@ -2326,9 +2335,6 @@ class AnimatedGif:
         return True
 
     def ImageProcessing(self, previewFrameIdx=-1):
-        # Dump the settings
-        # if __release__ == False:
-        #     self.conf.Dump()
 
         if previewFrameIdx >= 0:
             genPreview = True
@@ -2752,7 +2758,6 @@ class GifApp:
 
     def __init__(self, parent, cmdlineVideoPath, configPath="instagiffer.conf"):
         global __version__
-        global __release__
 
         self.gif = None
         self.guiBusy = False
@@ -2821,21 +2826,14 @@ class GifApp:
         self.ForceSingleInstance()
 
         #
-        # Debug version?
-        #
-
-        if self.conf.ParamExists("plugins", "debug"):
-            __release__ = not self.conf.GetParamBool("plugins", "debug")
-
-        #
         # Build GUI
         #
 
         if ImAMac():
             self.parent.tk.call("tk::unsupported::MacWindowStyle", "appearance", self.parent, "aqua")
 
-        if __release__ == False:
-            self.parent.title("Instagiffer - DEBUG MODE *******")
+        if debug_mode:
+            self.parent.title("Instagiffer [Debug]")
         else:
             self.parent.title("Instagiffer")
 
@@ -4471,15 +4469,21 @@ class GifApp:
         )
 
     def ViewLog(self):
-        numLines = sum(1 for line in open(GetLogPath()))
+        logPath = GetLogPath()
+
+        try:
+            numLines = sum(1 for line in open(logPath))
+        except FileNotFoundError:
+            numLines = 0
 
         if numLines <= 7:
             tkMessageBox.showinfo(
                 "Bug Report",
-                "It looks like the bug report is currently empty. Please try to reproduce the bug first, and then generate the report",
+                "It looks like the bug report is currently empty. Please try to reproduce the bug first, and then generate the report.",
             )
+            return
 
-        OpenFileWithDefaultApp(GetLogPath())
+        OpenFileWithDefaultApp(logPath)
 
     def OpenFAQ(self):
         OpenFileWithDefaultApp(__faqUrl__)
@@ -5168,7 +5172,7 @@ class GifApp:
                 errStr = str(e)
 
                 # If we're in debug mode, show a stack trace
-                if not __release__:
+                if debug_mode:
                     tb = traceback.format_exc()
                     errStr += "\n\n" + str(tb)
 
@@ -5233,16 +5237,22 @@ class GifApp:
         popupWindow = Toplevel(parent)
         popupWindow.withdraw()
         popupWindow.title(title)
-        popupWindow.wm_iconbitmap("instagiffer.ico")
+        if ImAPC():
+            popupWindow.wm_iconbitmap("instagiffer.ico")
+
         # popupWindow.transient(self.mainFrame)         #
 
         if not resizable:
             popupWindow.resizable(0, 0)
 
+        popupWindow.configure(padx=10, pady=10)
+
         self.guiBusy = True
         return popupWindow
 
     def ReModalDialog(self, dlg):
+        if ImAMac():
+            dlg.tk.call("tk::unsupported::MacWindowStyle", "appearance", dlg, "aqua")
         dlg.update()
         dlg.deiconify()
         dlg.lift()
@@ -5255,11 +5265,13 @@ class GifApp:
         if dlgGeometry is not None and len(dlgGeometry) and dlgGeometry != "center":
             dlg.geometry(dlgGeometry)
         else:
-            x = self.mainFrame.winfo_rootx() + 50
-            y = self.mainFrame.winfo_rooty() + 50
+            x = self.mainFrame.winfo_rootx() + 150
+            y = self.mainFrame.winfo_rooty() + 150
             dlg.geometry("+%d+%d" % (x, y))
 
         dlg.bind("<Escape>", lambda e: dlg.destroy())
+        if ImAMac():
+            dlg.tk.call("tk::unsupported::MacWindowStyle", "appearance", dlg, "aqua")
         dlg.update()
         dlg.deiconify()
         dlg.lift()
@@ -6207,7 +6219,7 @@ class GifApp:
 
     # Manual Size and Crop
     def OnManualSizeAndCrop(self):
-        dlg = self.CreateChildDialog("Crop Settings")
+        dlg = self.CreateChildDialog("Crop")
 
         if dlg is None:
             return False
@@ -7566,13 +7578,15 @@ class InstaCommandLine:
     def __init__(self):
         parser = argparse.ArgumentParser(
             prog="instagiffer",
-            description="Instagiffer %s — GIF creator" % INSTAGIFFER_VERSION,
+            description="Instagiffer %s — GIF creator" % __version__,
         )
         parser.add_argument("video", nargs="?", help="Path to local video file or URL")
         parser.add_argument("-o", "--output", help="Output GIF path (default: ~/Desktop/insta.gif)")
         parser.add_argument("--config", default="instagiffer.conf", help="Path to config file")
+        parser.add_argument("--debug", action="store_true", help="Enable debug mode (verbose logging to stdout)")
         args = parser.parse_args()
         self.configPath = args.config
+        self.debug = args.debug
         self.batchMode = args.video is not None
         if self.batchMode:
             self.videoFileName = args.video
@@ -7583,7 +7597,12 @@ class InstaCommandLine:
         if self.outputPath:
             conf.SetParam("paths", "gifOutputPath", os.path.abspath(self.outputPath))
 
-        progress = lambda done, _=None: print(" [OK]") if done else sys.stdout.write(".")
+        def progress(done, _=None):
+            if done:
+                print(" [OK]")
+            else:
+                sys.stdout.write(".")
+
         gif = AnimatedGif(conf, self.videoFileName, CreateWorkingDir(conf), progress, None)
 
         # GUI sets resizePostCrop to WxH via crop tool; in CLI, derive from video dims
@@ -7602,19 +7621,22 @@ class InstaCommandLine:
 
 
 def main():
-    global __version__
-    global __release__
+    global debug_mode
 
-    # cwd to the directory containing the executable
-    exeDir = os.path.dirname(os.path.realpath(sys.argv[0]))
+    # cwd to the directory containing the executable (or _MEIPASS when frozen)
+    exeDir = getattr(sys, "_MEIPASS", os.path.dirname(os.path.realpath(sys.argv[0])))
     os.chdir(exeDir)
 
-    # TODO: For release builds, build ImageMagick from source with
-    # --disable-modules --prefix=<bundle_path> to create a self-contained binary
+    #
+    # Command line mode
+    #
+
+    cmdline = InstaCommandLine()
+    debug_mode = cmdline.debug
 
     # File logging options
     try:
-        _log_handler = logging.FileHandler("instagiffer-event.log", mode="w")
+        _log_handler = logging.FileHandler(GetLogPath(), mode="w")
         _log_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s: %(message)s"))
         logging.basicConfig(level=logging.DEBUG, handlers=[_log_handler])
 
@@ -7631,26 +7653,19 @@ def main():
         pass
 
     # Turn off annoying Pillow logs
-    # print logging.Logger.manager.loggerDict # list all loggers
     logging.getLogger("PIL.Image").setLevel(logging.CRITICAL)
     logging.getLogger("PIL").setLevel(logging.CRITICAL)
 
-    # Developers only:
-    if not __release__:
+    if debug_mode:
         console = logging.StreamHandler(sys.stdout)
         logging.getLogger("").addHandler(console)
-
-    #
-    # Command line mode
-    #
-
-    cmdline = InstaCommandLine()
 
     if cmdline.batchMode:
         sys.exit(cmdline.run())
 
     # GUI mode
-    logging.info("Starting Instagiffer version " + __version__ + "...")
+    logging.info("Instagiffer: %s", __version__)
+    logging.info("Log: %s", GetLogPath())
 
     Tk.report_callback_exception = tkErrorCatcher
 
@@ -7661,14 +7676,10 @@ def main():
         if not ver:
             return None
         try:
-            import re
-
             license_path = "/System/Library/CoreServices/Setup Assistant.app/Contents/Resources/en.lproj/OSXSoftwareLicense.rtf"
             with open(license_path, "r", encoding="utf-8", errors="replace") as f:
                 for line in f:
-                    m = re.search(
-                        r"SOFTWARE LICENSE AGREEMENT FOR (macOS \S+)", line
-                    )
+                    m = re.search(r"SOFTWARE LICENSE AGREEMENT FOR (macOS \S+)", line)
                     if m:
                         return f"{m.group(1)} {ver}"
         except Exception:

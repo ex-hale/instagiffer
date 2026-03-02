@@ -24,11 +24,11 @@ SetupIconFile=..\instagiffer.ico
 Compression=lzma
 SolidCompression=yes
 
-WizardSmallImageFile=..\doc\graphics\installer_icon.bmp
+WizardSmallImageFile=..\assets\installer_icon.bmp
 ;WizardSmallImageBackColor=$395976
 WizardImageBackColor=$395976
 WizardImageStretch=yes
-WizardImageFile=..\doc\graphics\installer_side.bmp
+WizardImageFile=..\assets\installer_side.bmp
 
 
 [Languages]
