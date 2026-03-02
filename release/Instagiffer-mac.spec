@@ -1,7 +1,7 @@
 # -*- mode: python ; coding: utf-8 -*-
 """PyInstaller spec for Instagiffer macOS .app bundle.
 
-Usage:  pyinstaller release/Instagiffer.spec
+Usage:  pyinstaller release/Instagiffer-mac.spec
 Output: dist/Instagiffer.app
 """
 

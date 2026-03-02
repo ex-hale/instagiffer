@@ -54,6 +54,7 @@ import uuid
 import time
 import logging
 import random
+import ctypes
 import locale
 import argparse
 import shlex
@@ -277,7 +278,7 @@ def DefaultOutputHandler(stdoutLines, stderrLines, cmd):
             s = "Extracted %.1f seconds..." % (secs / 1000.0)
 
         # imagemagick - figure out what we're doing based on comments
-        imSearch = re.search(r'^".+(convert\.exe|convert)".+-comment"? "([^"]+):(\d+)"', outData)
+        imSearch = re.search(r'^".+(magick\.exe|convert\.exe|magick|convert)".+-comment"? "([^"]+):(\d+)"', outData)
         if imSearch:
             n = int(imSearch.group(3))
 
@@ -2794,8 +2795,17 @@ class GifApp:
         # self.finalSize            = "0x0"
 
         # DPI scaling
-        defaultDpi = 96  # corresponds to Smaller 100%
-        self.parent.tk.call("tk", "scaling", "-displayof", ".", defaultDpi / 72.0)
+        # On Windows with Python 3/Tk9 the process is DPI-aware, so we must query
+        # the actual display DPI — hardcoding 96 made the window too small on HiDPI.
+        # On Mac, Tk handles Retina natively; use the fixed 96-DPI baseline.
+        if ImAPC():
+            try:
+                dpi = ctypes.windll.user32.GetDpiForSystem()
+            except Exception:
+                dpi = 96
+        else:
+            dpi = 96
+        self.parent.tk.call("tk", "scaling", "-displayof", ".", dpi / 72.0)
 
         #
         # Child Dialog default values
@@ -2851,7 +2861,6 @@ class GifApp:
         frame.pack()
         self.mainFrame = frame
 
-        self.parent.resizable(width=FALSE, height=FALSE)
         # self.parent.protocol("WM_DELETE_WINDOW", self.OnWindowClose)
 
         #
@@ -3162,7 +3171,7 @@ class GifApp:
             column=4,
             rowspan=9,
             columnspan=4,
-            sticky="NSEW",
+            sticky=W,
             padx=padding,
             pady=padding,
         )
@@ -3667,6 +3676,10 @@ class GifApp:
                 continue
             tk_seq = "<" + raw.replace("Mod", mod).replace("+", "-") + ">"
             self.parent.bind(tk_seq, handler)
+            # Also bind on txtFname to prevent Entry class bindings (e.g. Ctrl+T = transpose
+            # characters, Ctrl+K = kill line) from corrupting the URL field when app shortcuts
+            # use the same key sequences.
+            self.txtFname.bind(tk_seq, lambda e, h=handler: (h(e), "break")[1])
 
     def CreateAppDataFolder(self):
         self.tempDir = CreateWorkingDir(self.conf)
@@ -5240,7 +5253,7 @@ class GifApp:
         if ImAPC():
             popupWindow.wm_iconbitmap("instagiffer.ico")
 
-        # popupWindow.transient(self.mainFrame)         #
+        popupWindow.transient(parent)
 
         if not resizable:
             popupWindow.resizable(0, 0)
@@ -5292,7 +5305,7 @@ class GifApp:
             self.Alert("Gif Player", "Internal error. Unable to play!")
             return
 
-        popupWindow = self.CreateChildDialog("Instagiffer GIF Preview")
+        popupWindow = self.CreateChildDialog("GIF Preview")
 
         isResizable = self.conf.GetParamBool("settings", "resizablePlayer")
 
@@ -6698,7 +6711,6 @@ class GifApp:
 
     def OnEffectsChange(self, *args):
         """Effects Configuration."""
-
         # Add new fx to this list
         allFx = [
             self.isGrayScale,
@@ -7693,7 +7705,23 @@ def main():
     logging.info("App: %s, Home: %s", exeDir, expanduser("~"))
 
     root = Tk()
-    app = GifApp(root, None, configPath=cmdline.configPath)
+    logging.info("Tk: %s", root.tk.call("info", "patchlevel"))
+    if ImAPC():
+        try:
+            dpi = ctypes.windll.user32.GetDpiForSystem()
+            logging.info("DPI: %d (scaling %.3f)", dpi, dpi / 72.0)
+        except Exception:
+            pass
+
+    GifApp(root, None, configPath=cmdline.configPath)
+
+    # Tk 9 on Windows doesn't auto-resize the root window to fit packed content.
+    # Read back the required size and apply it before locking resizability.
+    root.update_idletasks()
+    w, h = root.winfo_reqwidth(), root.winfo_reqheight()
+    root.geometry(f"{w}x{h}")
+    root.minsize(w, h)
+    root.resizable(width=FALSE, height=FALSE)
 
     root.mainloop()
 

@@ -5,12 +5,12 @@ import pytest
 
 def pytest_addoption(parser):
     parser.addoption(
-        "--app-package",
+        "--app",
         default=None,
-        help="Path to a frozen .app bundle (e.g. /Applications/Instagiffer.app). When set, tests run against the installed app instead of the dev source.",
+        help="Path to the frozen app to test against. macOS: path to .app bundle. Windows: path to .exe.",
     )
 
 
 @pytest.fixture
-def app_package(request):
-    return request.config.getoption("--app-package")
+def app_path(request):
+    return request.config.getoption("--app")

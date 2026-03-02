@@ -1,23 +1,29 @@
 """
 Instagiffer Test Suite
 
-GUI tests use the InstagifferAutomator (AppleScript) and require macOS + Accessibility permissions.
+GUI tests use InstagifferAutomator and run on both macOS (AppleScript) and Windows (pywinauto).
 CLI tests run on all platforms.
 
-Usage: python3 -m pytest test_instagiffer.py -v
+Usage:
+    python -m pytest test/ -v
+    python -m pytest test/ -v --app /Applications/Instagiffer.app   # macOS frozen app
+    python -m pytest test/ -v --app dist/Instagiffer/Instagiffer.exe  # Windows frozen app
 """
 
 import os
 import sys
 import time
-import pytest  # pylint: disable=import-error
+import pytest
 from instagiffer_automation import InstagifferAutomator
 
 TEST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_data")
 TEST_VIDEOS = sorted(os.path.join(TEST_DIR, f) for f in os.listdir(TEST_DIR)) if os.path.isdir(TEST_DIR) else []
 
 
-requires_macos = pytest.mark.skipif(sys.platform != "darwin", reason="macOS-only (AppleScript)")
+requires_gui = pytest.mark.skipif(
+    sys.platform not in ("darwin", "win32"),
+    reason="GUI automation requires macOS or Windows",
+)
 requires_test_video = pytest.mark.skipif(
     not os.path.isdir(TEST_DIR) or not os.listdir(TEST_DIR),
     reason="No test videos found — run: make test-videos",
@@ -46,13 +52,13 @@ def assert_valid_gif(path):
 # GUI tests
 
 
-@requires_macos
+@requires_gui
 @requires_test_video
-def test_full_smoke(app_package):
+def test_full_smoke(app_path):
     """Full smoke test: load video, create GIF with all options, verify output, generate bug report."""
     video = os.path.join(TEST_DIR, "test_video_1.mp4")
 
-    with InstagifferAutomator.launch(app_package=app_package, config_overrides={"color": {"numColors": "128"}}) as app:
+    with InstagifferAutomator.launch(app_path=app_path, config_overrides={"color": {"numColors": "128"}}) as app:
         # Verify app started successfully
         app.assert_log_contains(r"Instagiffer: \d+\.\d+\.\d+")
 
@@ -75,15 +81,9 @@ def test_full_smoke(app_package):
         # Close the GIF preview dialog
         app.close_preview()
 
-        # Help > Generate Bug Report should open the log file, not an error dialog
+        # Help > Generate Bug Report should open the log file in a text editor (not an error dialog)
         assert os.path.isfile(app.log_path), f"Log file not found at {app.log_path}"
-        app.click_menu("Help", "Generate Bug Report")
-        time.sleep(1)
-        names = app.get_window_names()
-        assert not any("Bug Report" in n for n in names), f"Bug Report window not found. Windows: {names}"
-
-        # Close the log viewer window opened by the default app
-        app.close_frontmost_window()
+        app.generate_bug_report()
 
 
 # CLI tests

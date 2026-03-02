@@ -7,16 +7,10 @@
             "request": "launch",
             "program": "${workspaceFolder}/main.py",
             "args": ["--debug"],
-            "python": "${workspaceFolder}/.venv/bin/python3",
+            "windows": { "python": "${workspaceFolder}/.venv/Scripts/python.exe" },
+            "osx": { "python": "${workspaceFolder}/.venv/bin/python3" },
             "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal",
-            //"preLaunchTask": "Run Tests"
-            // Uncomment for bundled app testing with standalone ImageMagick:
-            // "env": {
-            //     "MAGICK_HOME": "./deps/mac/im",
-            //     "MAGICK_CONFIGURE_PATH": "./deps/mac/im/etc/ImageMagick-6",
-            //     "FONTCONFIG_PATH": "./deps/mac/im/etc/fonts"
-            // }
+            "console": "integratedTerminal"
         }
     ]
 }

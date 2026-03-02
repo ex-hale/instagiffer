@@ -25,9 +25,23 @@ make run     # Launches the app
 
 ### Windows
 
-Prerequisites:
-- [Python 3.10+](https://www.python.org/downloads/)
-- [Inno Setup](https://jrsoftware.org/isdl.php) (for building the installer)
+Prerequisites (one-time setup on a fresh machine). In any PowerShell prompt:
+
+```powershell
+Set-ExecutionPolicy -Scope Process Bypass
+.\install-devtools.ps1
+```
+
+This uses [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/) (built into
+Windows 11) to install Python 3.13, Git for Windows, GNU Make, and Inno Setup 6. Then open a new
+Git Bash window:
+
+```bash
+git clone https://github.com/ex-hale/instagiffer.git
+cd instagiffer
+make deps    # Downloads ffmpeg, yt-dlp, gifsicle, and ImageMagick into deps/win/
+make run     # Launches the app
+```
 
 ## Development
 

@@ -1,21 +1,31 @@
 VENV := .venv
-PYTHON := $(VENV)/bin/python3
-PIP := $(VENV)/bin/pip
 
-VERSION := $(shell python3 -c "import instagiffer; print(instagiffer.__version__)")
+ifeq ($(OS),Windows_NT)
+    PYTHON     := $(VENV)/Scripts/python
+    PIP        := $(VENV)/Scripts/pip
+    PYTHON_CMD := python
+    VENV_STAMP := $(VENV)/Scripts/activate
+else
+    PYTHON     := $(VENV)/bin/python3
+    PIP        := $(VENV)/bin/pip
+    PYTHON_CMD := python3
+    VENV_STAMP := $(VENV)/bin/activate
+endif
+
+VERSION := $(shell grep -m1 '__version__' instagiffer.py | awk -F'"' '{print $$2}')
 
 TEST_VIDEO_URLS := \
 	https://www.youtube.com/watch?v=aqz-KE-bpKQ \
 	https://www.youtube.com/watch?v=L_uXZEkhlZU
 
-.PHONY: init run test test-app test-videos lint format clean deps dist install uninstall
+.PHONY: init run test test-app test-videos lint format clean deps dist install
 
-init: $(VENV)/bin/activate
+init: $(VENV_STAMP)
 
-$(VENV)/bin/activate: pyproject.toml
-	python3 -m venv $(VENV)
+$(VENV_STAMP): pyproject.toml
+	$(PYTHON_CMD) -m venv $(VENV)
 	$(PIP) install -e ".[dev]"
-	@echo "\nDone. Activate with: source $(VENV)/bin/activate"
+	@echo "Done. Activate with: source $(VENV_STAMP)"
 
 run: init
 	$(PYTHON) main.py
@@ -30,7 +40,7 @@ test-videos:
 	@mkdir -p test/test_data
 	@i=1; for url in $(TEST_VIDEO_URLS); do \
 		if [ ! -f "test/test_data/test_video_$$i.mp4" ]; then \
-			yt-dlp -f "worst[ext=mp4]/worst" -o "test/test_data/test_video_$$i.mp4" "$$url"; \
+			$(YTDLP) -f "worst[ext=mp4]/worst" -o "test/test_data/test_video_$$i.mp4" "$$url"; \
 		fi; \
 		i=$$((i + 1)); \
 	done
@@ -39,7 +49,7 @@ test: init format lint test-videos
 	$(PYTHON) -m pytest
 
 test-app: install test-videos
-	$(PYTHON) -m pytest --app-package=$(INSTALL_PATH)
+	$(PYTHON) -m pytest --app=$(INSTALL_PATH)
 
 clean:
 	rm -rf $(VENV) __pycache__ test/__pycache__ .pytest_cache *.egg-info instagiffer-event.log
@@ -53,6 +63,7 @@ INSTALL_PATH := /Applications/Instagiffer.app
 MAGICK_OUT   := build/imagemagick/out
 FFMPEG_URL   := https://evermeet.cx/ffmpeg/getrelease/zip
 YTDLP_URL    := https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
+YTDLP        := deps/mac/yt-dlp
 
 deps: init
 	@command -v brew >/dev/null || (echo "Error: Homebrew is required. See https://brew.sh" && exit 1)
@@ -70,7 +81,7 @@ deps: init
 
 $(APP_PATH): init
 	@echo "Building Mac release with PyInstaller"
-	$(PYTHON) -m PyInstaller release/Instagiffer.spec --distpath dist --workpath build/pyinstaller --noconfirm
+	$(PYTHON) -m PyInstaller release/Instagiffer-mac.spec --distpath dist --workpath build/pyinstaller --noconfirm
 	codesign --force --deep --sign - $(APP_PATH)
 
 dist: $(APP_PATH)
@@ -97,14 +108,47 @@ install: $(APP_PATH)
 
 else ifeq ($(OS),Windows_NT)
 
-deps:
-	@echo "Windows deps: place binaries in deps/win/ manually (see README)"
+APP_PATH     := dist/Instagiffer
+INSTALL_PATH := dist/Instagiffer/Instagiffer.exe
+ISCC         := C:/Program Files (x86)/Inno Setup 6/ISCC.exe
+SEVENZIP     := C:/Program Files/7-Zip/7z.exe
+MAGICK_VER   := 7.1.2-15
+MAGICK_URL   := https://imagemagick.org/archive/binaries/ImageMagick-$(MAGICK_VER)-portable-Q16-x64.7z
+FFMPEG_URL   := https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+YTDLP_URL    := https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
+YTDLP        := deps/win/yt-dlp.exe
+GIFSICLE_URL := https://eternallybored.org/misc/gifsicle/releases/gifsicle-1.95-win64.zip
 
-dist: init deps format lint test
-	python release/setup-win-cx_freeze.py build
-	del instagiffer*setup.exe 2>NUL || true
-	"C:\Program Files (x86)\Inno Setup 5\ISCC.exe" release/installer.iss \
-		/dMyAppVersion=$(VERSION)
-	@echo "Built instagiffer-$(VERSION)-setup.exe"
+deps: init
+	$(PIP) install -e ".[build-win,test-win]"
+	@mkdir -p deps/win build
+	@[ -f deps/win/magick.exe ] || ( \
+		curl -fSL -o build/magick-win.7z "$(MAGICK_URL)" && \
+		"$(SEVENZIP)" e build/magick-win.7z -odeps/win -y "magick.exe" && \
+		rm build/magick-win.7z )
+	@[ -f deps/win/ffmpeg.exe ] || ( \
+		curl -fSL -o build/ffmpeg-win.zip "$(FFMPEG_URL)" && \
+		mkdir -p build/ffmpeg-tmp && \
+		unzip -o build/ffmpeg-win.zip -d build/ffmpeg-tmp && \
+		find build/ffmpeg-tmp -name ffmpeg.exe -exec cp {} deps/win/ \; && \
+		rm -rf build/ffmpeg-win.zip build/ffmpeg-tmp )
+	@[ -f deps/win/yt-dlp.exe ] || curl -fSL -o deps/win/yt-dlp.exe "$(YTDLP_URL)"
+	@[ -f deps/win/gifsicle.exe ] || ( \
+		curl -fSL -o build/gifsicle-win.zip "$(GIFSICLE_URL)" && \
+		unzip -jo build/gifsicle-win.zip "*.exe" -d deps/win/ && \
+		rm build/gifsicle-win.zip )
+	@echo "Windows dependencies ready in deps/win/"
+
+$(APP_PATH): init
+	@echo "Building Windows release with PyInstaller"
+	$(PYTHON) -m PyInstaller release/Instagiffer-win.spec --distpath dist --workpath build/pyinstaller --noconfirm
+
+dist: deps $(APP_PATH)
+	@rm -f dist/instagiffer-$(VERSION)-setup.exe
+	"$(ISCC)" release/installer.iss /dMyAppVersion=$(VERSION)
+	@echo "Built dist/instagiffer-$(VERSION)-setup.exe"
+
+install: $(APP_PATH)
+	@echo "To install, run: dist/instagiffer-$(VERSION)-setup.exe"
 
 endif

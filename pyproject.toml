@@ -30,7 +30,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["setuptools", "pytest", "pylint", "black"]
 build-mac = ["pyinstaller"]
-build-win = ["cx_Freeze"]
+build-win = ["pyinstaller", "pywin32"]
+test-win = ["pywinauto", "pyperclip"]
 
 [project.urls]
 Homepage = "https://github.com/ex-hale/instagiffer"
@@ -48,6 +49,9 @@ version = {attr = "instagiffer.__version__"}
 [tool.black]
 line-length = 200
 
+
+[tool.pylint.main]
+extension-pkg-allow-list = ["win32api", "win32event", "win32gui", "win32process"]
 
 [tool.pylint."messages control"]
 disable = [
