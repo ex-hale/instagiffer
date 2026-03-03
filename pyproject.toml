@@ -46,6 +46,10 @@ py-modules = ["instagiffer"]
 [tool.setuptools.dynamic]
 version = {attr = "instagiffer.__version__"}
 
+[tool.pytest.ini_options]
+testpaths = ["test"]
+addopts = "-v --tb=short"
+
 [tool.black]
 line-length = 200
 
