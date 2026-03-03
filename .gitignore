@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.venv/
+
+# IDE — commit shared configs, ignore the rest
+.vscode/*
+!.vscode/launch.json
+
+# Binary dependencies (downloaded via make deps_mac / deps_win)
+deps/
+
+# Runtime
+instagiffer-event.log
+
+# macOS
+.DS_Store
+
+# pytest
+.pytest_cache/
+
+# Test artifacts (downloaded via make test-video)
+test_data/

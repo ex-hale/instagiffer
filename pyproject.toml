@@ -1,0 +1,76 @@
+[build-system]
+requires = ["setuptools>=75.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "instagiffer"
+dynamic = ["version"]
+description = "The easy way to make GIFs from videos"
+readme = "README.md"
+license = "BSD-4-Clause"
+requires-python = ">=3.10"
+authors = [
+    { name = "Justin Todd", email = "instagiffer@gmail.com" },
+]
+keywords = ["gif", "video", "animation", "ffmpeg", "imagemagick"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: MacOS X",
+    "Environment :: Win32 (MS Windows)",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: MacOS",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video :: Conversion",
+]
+dependencies = [
+    "pillow",
+]
+
+[project.optional-dependencies]
+dev = ["setuptools", "pytest", "pylint", "black"]
+build-mac = ["pyinstaller"]
+build-win = ["pyinstaller", "pywin32"]
+test-win = ["pywinauto", "pyperclip"]
+
+[project.urls]
+Homepage = "https://github.com/ex-hale/instagiffer"
+Changelog = "https://github.com/ex-hale/instagiffer/releases"
+
+[project.scripts]
+instagiffer = "instagiffer:main"
+
+[tool.setuptools]
+py-modules = ["instagiffer"]
+
+[tool.setuptools.dynamic]
+version = {attr = "instagiffer.__version__"}
+
+[tool.pytest.ini_options]
+testpaths = ["test"]
+addopts = "-v --tb=short"
+
+[tool.black]
+line-length = 200
+
+
+[tool.pylint.main]
+extension-pkg-allow-list = ["win32api", "win32event", "win32gui", "win32process"]
+
+[tool.pylint."messages control"]
+disable = [
+    "W0401", "W1201", "W0212", "W0511", "W0613", "W0201",
+    "C0103", "C0415", "W0614", "C0116", "C0115", "C0209", "C0301", "C0413",
+    "C0412", "C0302", "C0121", "C0123", "C0200", "C0325", "C1802",
+    "R0205", "R0903", "R0902", "R0904", "R0912", "R0913", "R0914", "R0915", "R0916",
+    "R0917",
+    "R1701", "R1703", "R1704", "R1705", "R1710", "R1714", "R1716", "R1721",
+    "R1730", "R1731", "R1732", "R1734", "R1735",
+    "W0602", "W0603", "W0707", "W1514",
+]
+
+[tool.pylint.typecheck]
+generated-members = ["PIL.Image.LANCZOS", "PIL.Image.NEAREST"]
+
+[tool.pylint.format]
+max-line-length = 200
