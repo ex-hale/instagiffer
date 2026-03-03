@@ -3030,7 +3030,7 @@ class GifApp:
             column=4,
             rowspan=9,
             columnspan=4,
-            sticky=W,
+            sticky="NSEW" if ImAMac() else "W",
             padx=padding,
             pady=padding,
         )
