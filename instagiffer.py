@@ -61,9 +61,10 @@ import shlex
 import traceback
 from random import randrange
 from os.path import expanduser
+import configparser
 from configparser import ConfigParser, RawConfigParser
 from threading import Thread
-from queue import Queue
+from queue import Empty, Queue
 from math import gcd
 
 # TK
@@ -98,6 +99,36 @@ def ImAPC():
     return sys.platform == "win32"
 
 
+def GetDisplayScaleFactor():
+    """Return the physical-to-logical pixel ratio on Windows (e.g. 1.25 for 125% scaling).
+
+    Pillow's ImageGrab captures at physical resolution, but Tk coordinates
+    are in logical (virtualized) pixels when display scaling > 100%.
+    Also logs the DPI and scale info.
+    """
+    if not ImAPC():
+        return 1.0
+    try:
+        _setCtx = ctypes.windll.user32.SetThreadDpiAwarenessContext
+        _setCtx.restype = ctypes.c_void_p
+        _setCtx.argtypes = [ctypes.c_void_p]
+        oldCtx = _setCtx(ctypes.c_void_p(-4))  # PER_MONITOR_AWARE_V2
+        physW = ctypes.windll.user32.GetSystemMetrics(0)  # SM_CXSCREEN
+        physH = ctypes.windll.user32.GetSystemMetrics(1)  # SM_CYSCREEN
+        dpi = ctypes.windll.user32.GetDpiForSystem()
+        _setCtx(ctypes.c_void_p(oldCtx))
+    except (AttributeError, OSError):
+        return 1.0
+    import tkinter as tk
+
+    root = tk._default_root
+    logicalW = root.winfo_screenwidth() if root else physW
+    logicalH = root.winfo_screenheight() if root else physH
+    scale = physW / logicalW if logicalW > 0 else 1.0
+    logging.info("DPI: %d, Display: %dx%d physical, %dx%d logical (scale %.2f)", dpi, physW, physH, logicalW, logicalH, scale)
+    return scale if scale > 1.0 else 1.0
+
+
 def OpenFileWithDefaultApp(fileName):
     """Open a file in the application associated with this file extension"""
     if sys.platform == "darwin":
@@ -105,7 +136,7 @@ def OpenFileWithDefaultApp(fileName):
     else:
         try:
             os.startfile(fileName)
-        except:
+        except OSError:
             tkMessageBox.showinfo(
                 "Unable to open!",
                 "I wasn't allowed to open '" + fileName + "'. You will need to perform this task manually.",
@@ -114,8 +145,8 @@ def OpenFileWithDefaultApp(fileName):
 
 def GetFileExtension(filename):
     try:
-        fname, fext = os.path.splitext(filename)
-    except:
+        _fname, fext = os.path.splitext(filename)
+    except (TypeError, AttributeError):
         return ""
 
     if fext is None:
@@ -189,23 +220,6 @@ def ReScale(val, oldScale, newScale):
     return NewValue
 
 
-def norecurse(func):
-    """norecurse decorator"""
-    func.called = False
-
-    def f(*args, **kwargs):
-        if func.called:
-            print("Recursion!")
-            return False
-        else:
-            func.called = True
-            result = func(*args, **kwargs)
-            func.called = False
-            return result
-
-    return f
-
-
 def DurationStrToMillisec(duration_str, throwParseError=False):
     """Convert a time or duration (hh:mm:ss.ms) string into a value in milliseconds"""
     if duration_str is not None:
@@ -226,7 +240,6 @@ def DurationStrToSec(durationStr):
     if ms == 0:
         return 0
     else:
-        # return int((ms + 500) / 1000) # Rouding
         return int(ms / 1000)  # Floor
 
 
@@ -243,14 +256,6 @@ def MillisecToDurationComponents(msTotal):
 def MillisecToDurationStr(msTotal):
     dur = MillisecToDurationComponents(msTotal)
     return "%02d:%02d:%02d.%03d" % (dur[0], dur[1], dur[2], dur[3])
-
-
-def CountFilesInDir(dirname, filenamePattern=None):
-    if filenamePattern is None:
-        return len([name for name in os.listdir(dirname) if os.path.isfile(os.path.join(dirname, name))])
-    else:
-        fileglobber = dirname + filenamePattern + "*"
-        return len(glob.glob(fileglobber))
 
 
 def DefaultOutputHandler(stdoutLines, stderrLines, cmd):
@@ -296,13 +301,7 @@ ON_POSIX = "posix" in sys.builtin_module_names
 
 def EnqueueProcessOutput(streamId, inStream, outQueue):
     for line in iter(inStream.readline, ""):
-        # logging.info(streamId + ": " + line)
         outQueue.put(line)
-
-
-def NotifyUser(title, msg):
-    """Prompt User"""
-    return tkMessageBox.showinfo(title, msg)
 
 
 def RunProcess(
@@ -361,18 +360,17 @@ def RunProcess(
             while True:  # Exhaust the queue
                 stdoutLines = qOut.get_nowait()
                 stdout += stdoutLines
-        except:
+        except Empty:
             pass
 
         try:
             while True:
                 stderrLines = qErr.get_nowait()
                 stderr += stderrLines
-        except:
+        except Empty:
             pass
 
         if outputTranslator is not None:
-            # try:
             statusStr, percentDoneInt = outputTranslator(stdoutLines, stderrLines, cmd)
 
             if type(percentDoneInt) == int:
@@ -380,15 +378,12 @@ def RunProcess(
             elif percent is not None:
                 percentDoneInt = percent
 
-            # except:
-            #    pass
-
         # Caller wants to abort!
         if callback is not None and callback(percentDoneInt, statusStr) == False:
             try:
                 pipe.terminate()
                 pipe.kill()
-            except:
+            except OSError:
                 logging.error("RunProcess: kill() or terminate() caused an exception")
 
             callbackReturnedFalse = True
@@ -407,7 +402,6 @@ def RunProcess(
     # Callback aborted command
     if callbackReturnedFalse:
         logging.error("RunProcess was aborted by caller")
-        # return False
 
     # result
     try:
@@ -477,7 +471,7 @@ def GetFailSafeDir(conf, badPath):
                 err = False
                 try:
                     os.makedirs(goodPath)
-                except:
+                except OSError:
                     err = True
 
                 if os.path.exists(goodPath):
@@ -521,11 +515,8 @@ class InstaConfig:
             return False
 
         if not key.lower() in self.config._sections[category.lower()]:
-            # self.Dump()
-            # logging.error("Configuration parameter %s.%s does not exist" % (category, key))
             return False
         else:
-            # logging.info("Configuration parameter %s.%s exists" % (category, key))
             return True
 
     def GetParam(self, category, key):
@@ -544,7 +535,7 @@ class InstaConfig:
         # Expand variables
         try:
             retVal = os.path.expandvars(retVal)
-        except:
+        except (TypeError, ValueError):
             pass
 
         if retVal.startswith(";"):
@@ -596,26 +587,6 @@ class InstaConfig:
         boolVal = str(boolVal)
         changed = self.SetParam(category, key, val)
         return changed
-
-    def Dump(self):
-        logging.info("=== GIF Configuration =========================================")
-
-        for cat in self.config._sections:
-            logging.info("%s:" % (str(cat)))
-
-            for k in self.config._sections[cat]:
-                dumpStr = "  - " + k + ": "
-                val = self.GetParam(cat, k)
-
-                if isinstance(val, bool):
-                    dumpStr += str(val) + " (boolean)"
-                elif isinstance(val, int):
-                    dumpStr += str(val) + " (int)"
-                else:
-                    dumpStr += val
-                logging.info(dumpStr)
-
-        logging.info("===============================================================")
 
 
 class ImagemagickFont:
@@ -726,7 +697,6 @@ class AnimatedGif:
         self.maskDir = os.path.join(workDir, "mask")
         self.downloadDir = os.path.join(workDir, "downloads")
         self.previewFile = os.path.join(workDir, "preview.gif")
-        self.vidThumbFile = os.path.join(workDir, "thumb.png")
         self.blankImgFile = os.path.join(workDir, "blank.gif")
 
         self.OverwriteOutputGif(self.conf.GetParamBool("settings", "overwriteGif"))
@@ -738,9 +708,6 @@ class AnimatedGif:
 
         startupLog = "AnimatedGif:: media: [" + mediaLocator + "], workingDir: [" + workDir + "], gifOut: [" + self.GetNextOutputPath() + "]"
         logging.info(startupLog)
-
-        # if mediaLocator == self.GetGifOutputPath():
-        #     self.FatalError("This file is in-use by Instagiffer!")
 
         if not os.path.exists(os.path.dirname(self.gifOutPath)):
             os.makedirs(os.path.dirname(self.gifOutPath))
@@ -780,8 +747,6 @@ class AnimatedGif:
         self.DeleteProcessedImages()
         self.DeleteCapturedImages()
         self.DeleteMaskImages()
-
-        # self.DeleteGifOutput()
 
         mediaLocator = self.ResolveUrlShortcutFile(mediaLocator)
 
@@ -841,7 +806,7 @@ class AnimatedGif:
         """Given a Windows .url filename, returns the main URL, or argument passed in if it can't
         find one."""
 
-        fname, fext = os.path.splitext(filename)
+        _fname, fext = os.path.splitext(filename)
         if not fext or len(fext) == 0 or str(fext.lower()) != ".url":
             return filename
 
@@ -849,7 +814,7 @@ class AnimatedGif:
         config = RawConfigParser()
         try:
             config.read(filename)
-        except:
+        except (configparser.Error, OSError):
             return filename
 
         # Return the URL= value from the [InternetShortcut] section.
@@ -879,6 +844,7 @@ class AnimatedGif:
         imgDimensions = ()
 
         resizeRatio = 1.0
+        dpiScale = GetDisplayScaleFactor()
 
         # Max width/height restrictions
         if web:
@@ -905,11 +871,18 @@ class AnimatedGif:
                 capFileName += ".bmp"
 
                 try:
-                    img = ImageGrab.grab((x, y, x + width, y + height))
+                    px = round(x * dpiScale)
+                    py = round(y * dpiScale)
+                    pw = round(width * dpiScale)
+                    ph = round(height * dpiScale)
+                    img = ImageGrab.grab((px, py, px + pw, py + ph))
                 except MemoryError:
                     self.callback(True)
                     self.FatalError("Ran out of memory during screen capture. Try recording a smaller area, or decreasing your duration.")
                     return False
+
+                if dpiScale != 1.0:
+                    img = img.resize((width, height), PIL.Image.LANCZOS)
 
                 imgDimensions = img.size
 
@@ -1027,12 +1000,6 @@ class AnimatedGif:
         runCallback = None
         statBarCB = DefaultOutputHandler
 
-        def FontConfOutHandler(unused1, unused2, unused3):
-            return (
-                "First time running Instagiffer for Mac. Configuring fonts. This will take a few minutes...",
-                None,
-            )
-
         if ImAMac():
             # Point fontconfig at the bundled config so the static magick
             # binary can discover macOS system fonts.
@@ -1093,10 +1060,9 @@ class AnimatedGif:
 
             try:
                 shutil.copy(fromFile, toFile)
-            except:
+            except OSError:
                 self.callback(True)
                 return False
-                # self.FatalError("Unable to export frames to the directory specified. Are you sure you can write files to this location?")
 
             self.RotateImageFile(toFile, rotateDeg)
 
@@ -1125,10 +1091,9 @@ class AnimatedGif:
             self.callback(False)
 
             toFile = "%simage%04d.png" % (directory + os.sep, x)
-            # logging.info("Re-enumerate %s to %s" % (fromFile, toFile))
             try:
                 shutil.move(fromFile, toFile)
-            except:
+            except OSError:
                 retVal = False
                 break
 
@@ -1228,7 +1193,7 @@ class AnimatedGif:
 
             try:
                 os.remove(fb)
-            except:
+            except OSError:
                 self.DeleteExtractedImages()
                 self.FatalError("Couldn't delete frame: " + fb)
 
@@ -1287,7 +1252,6 @@ class AnimatedGif:
             return "%simported_image%04d.png" % (self.GetExtractedImagesDir(), x)
 
         x = 1
-        totalCount = len(importedImgList)
         newImportList = list()
         for importFile in importedImgList:
             toFile = GetImportFileName(x)  # "%simported_image%04d.png" % (self.GetExtractedImagesDir() + os.sep, x)
@@ -1324,8 +1288,11 @@ class AnimatedGif:
                 newImportList.append(toFile)
                 x += 1
             else:
-                fname, fext = os.path.splitext(toFile)
+                fname, _fext = os.path.splitext(toFile)
 
+                # TODO: the break fires before shutil.move / newImportList.append,
+                # making lines after it unreachable.  Possibly intentional (counting
+                # sub-files without moving them) — investigate before reordering.
                 sx = 0
                 while True:
                     x += 1
@@ -1397,21 +1364,12 @@ class AnimatedGif:
         if self.overwriteGif == False:
             # If overwrite is off, figure out what next file is
             origFileName = self.gifOutPath
-            prevFileName = origFileName
             idx = 1
-            largestTs = 0
 
             while True:
                 if not os.path.isfile(fileName):
                     break
-                # else:
-                #     fileTs = os.stat(fileName).st_mtime
-                #     if fileTs < largestTs:
-                # broken sequence
-                #     else:
-                #         largestTs = fileTs
 
-                prevFileName = fileName
                 fileName = os.path.dirname(origFileName) + os.sep + os.path.splitext(os.path.basename(origFileName))[0] + "%03d.%s" % (idx, self.GetFinalOutputFormat())
                 idx += 1
 
@@ -1431,30 +1389,6 @@ class AnimatedGif:
         self.callback(True)
 
         raise RuntimeError(message)
-
-    def GetVideoThumb(self, timeStr, maxWidthHeight):
-        if not self.SourceIsVideo():
-            return False
-
-        RunProcess(
-            '"' + self.conf.GetParam("paths", "ffmpeg") + '" -loglevel panic -i "%s" -y -ss %s -vframes 1 "%s"' % (self.videoPath, timeStr, self.GetThumbImagePath()),
-            None,
-            False,
-        )
-
-        return True
-
-    def GetThumbImagePath(self):
-        return self.vidThumbFile
-
-    def ThumbFileExists(self):
-        return os.path.exists(self.GetThumbImagePath())
-
-    def GetThumbAge(self):
-        if self.ThumbFileExists():
-            return time.time() - os.stat(self.GetThumbImagePath()).st_mtime
-        else:
-            return 1000
 
     def GetVideoParameters(self):
         mediaPath = None
@@ -1476,7 +1410,7 @@ class AnimatedGif:
         if not os.path.exists(mediaPath):
             self.FatalError("'" + mediaPath + "' does not exist!")
 
-        stdout, stderr = RunProcess(
+        _stdout, stderr = RunProcess(
             '"' + self.conf.GetParam("paths", "ffmpeg") + '" -i "' + CleanupPath(mediaPath) + '"',
             None,
             True,
@@ -1512,7 +1446,6 @@ class AnimatedGif:
 
         if match:
             logging.info("Side rotation detected")
-            rotation = int(match.groups()[0])
             self.videoWidth, self.videoHeight = self.videoHeight, self.videoWidth
 
         # Try to get length
@@ -1568,22 +1501,14 @@ class AnimatedGif:
         return sorted(glob.glob(self.GetResizedImagesDir() + "*"))
 
     def ResizedImagesExist(self):
-        count = 0
-        files = glob.glob(self.GetResizedImagesDir() + "*")
-        for f in files:
-            count = count + 1
-
-        if count > 0:
-            return True
-        else:
-            return False
+        return len(glob.glob(self.GetResizedImagesDir() + "*")) > 0
 
     def DeleteResizedImages(self):
         files = glob.glob(self.resizeDir + os.sep + "*")
         for f in files:
             try:
                 os.remove(f)
-            except:  # WindowsError:
+            except OSError:
                 logging.error("Can't delete %s" % (f))
 
     def GetExtractedImagesDir(self):
@@ -1602,15 +1527,7 @@ class AnimatedGif:
             return 0
 
     def ExtractedImagesExist(self):
-        count = 0
-        files = glob.glob(self.GetExtractedImagesDir() + "*")
-        for f in files:
-            count = count + 1
-
-        if count > 0:
-            return True
-        else:
-            return False
+        return len(glob.glob(self.GetExtractedImagesDir() + "*")) > 0
 
     def GetNumFrames(self):
         return len(self.GetExtractedImageList())
@@ -1623,7 +1540,7 @@ class AnimatedGif:
         for f in files:
             try:
                 os.remove(f)
-            except:  # WindowsError:
+            except OSError:
                 errStr = "Can't delete the following file:\n\n%s\n\nIs it open in another program?" % (f)
                 self.FatalError(errStr)
 
@@ -1637,7 +1554,7 @@ class AnimatedGif:
         if os.path.exists(self.previewFile):
             try:
                 os.remove(self.previewFile)
-            except:
+            except OSError:
                 pass
 
         files = glob.glob(self.GetProcessedImagesDir() + "*")
@@ -1645,7 +1562,7 @@ class AnimatedGif:
         for f in files:
             try:
                 os.remove(f)
-            except:  # WindowsError:
+            except OSError:
                 errStr = "Can't delete %s. Is it open in another program?" % (f)
                 self.FatalError(errStr)
 
@@ -1666,14 +1583,6 @@ class AnimatedGif:
     def GifExists(self):
         return self.gifCreated and os.path.exists(self.GetLastGifOutputPath())
 
-    def DeleteGifOutput(self):
-        if not self.overwriteGif:
-            if os.path.exists(self.gifOutPath):
-                try:
-                    os.remove(self.gifOutPath)
-                except:
-                    self.FatalError("Failed to delete GIF out file. Is it use?")
-
     def GetMaskFileName(self, maskIdx):
         return "%simage%04d.png" % (self.maskDir + os.sep, maskIdx + 1)
 
@@ -1681,20 +1590,6 @@ class AnimatedGif:
         files = glob.glob(self.maskDir + os.sep + "*")
         for f in files:
             os.remove(f)
-
-    def CopyFramesToResizeFolder(self):
-        # Copy extracted images over again
-        files = glob.glob(self.frameDir + os.sep + "*")
-        for f in files:
-            self.callback(False)
-            shutil.copy(f, self.resizeDir)
-        self.callback(True)
-
-    def CopyFramesToProcessedFolder(self):
-        # Copy extracted images over again
-        files = glob.glob(self.resizeDir + os.sep + "*")
-        for f in files:
-            shutil.copy(f, self.processedDir)
 
     def IsDownloadedVideo(self):
         return self.isUrl
@@ -1706,7 +1601,7 @@ class AnimatedGif:
         if self.isUrl and len(self.origURL):
             cmdVideoTitle = '"' + self.conf.GetParam("paths", "youtubedl") + '"' + " --get-filename " + ' "' + self.origURL + '"'
 
-            stdout, stderr = RunProcess(cmdVideoTitle, self.callback, True)
+            stdout, _stderr = RunProcess(cmdVideoTitle, self.callback, True)
 
             if stdout != "":
                 self.videoFileName = stdout.strip()
@@ -1719,9 +1614,6 @@ class AnimatedGif:
             self.callback(False)
             shutil.copy(self.videoPath, newFileName)
         self.callback(True)
-
-    def GetDownloadedQuality(self):
-        return self.downloadQuality
 
     def DownloadVideo(self, url):
         downloadFileName = self.downloadDir + os.sep + "videofile_" + str(uuid.uuid4())
@@ -1740,7 +1632,7 @@ class AnimatedGif:
         # Make sure they don't download a playlist
         if url.lower().find("youtube") != -1 and url.find("&list=") != -1:
             logging.info("Youtube playlist detected. Removing playlist component from URL")
-            url, sep, extra = url.partition("&list=")
+            url, _sep, _extra = url.partition("&list=")
 
         # Build format str
         fmtStr = "[height<=?" + str(maxHeight) + "] "
@@ -1809,7 +1701,6 @@ class AnimatedGif:
             return False
 
     def ExtractFrames(self):
-        # self.DeleteResizedImages()
         self.DeleteExtractedImages()
 
         doDeglitch = False
@@ -1905,7 +1796,6 @@ class AnimatedGif:
         # DEGLITCH
         # Delete the first second's worth of frames
         if doDeglitch:
-            # self.callback(False, "De-glitch...")
             deleteCount = 2 * int(self.conf.GetParam("rate", "framerate"))
 
             logging.info("Deglitch. Remove frames 1 to %d" % deleteCount)
@@ -1918,18 +1808,15 @@ class AnimatedGif:
                     self.FatalError("De-glitch failed. Frame not found: " + framePath)
                 try:
                     os.remove(framePath)
-                except:  # WindowsError:
+                except OSError:
                     self.FatalError("De-glitch failed. Delete failed: " + framePath)
 
                 self.callback(False)
-                # logging.info("Deglitch: Removed " + framePath)
 
             # renumerate after de-glitch
             if not self.ReEnumerateExtractedFrames():
                 self.FatalError("Failed to re-enumerate frames")
 
-        # This command can take a while. Is it even neccesary?
-        # self.CopyFramesToResizeFolder()
         return True
 
     def CheckDuplicates(self, cull=False):
@@ -1949,7 +1836,7 @@ class AnimatedGif:
                     try:
                         os.remove(imgPath)
                         logging.info("Removing duplicate frame: %s" % (imgPath))
-                    except:
+                    except OSError:
                         logging.error("Can't delete duplicate frame: %s" % (imgPath))
 
             else:
@@ -1986,7 +1873,7 @@ class AnimatedGif:
         return "png"
 
     def GetFinalOutputFormat(self):
-        fname, fext = os.path.splitext(self.gifOutPath)
+        _fname, fext = os.path.splitext(self.gifOutPath)
         fext = str(fext).lower()
 
         fext = fext.strip(".")
@@ -2180,7 +2067,7 @@ class AnimatedGif:
                 fontOutlineThickness += 0
         try:
             int(fontSize)
-        except:
+        except (ValueError, TypeError):
             fontSize = 24
 
         if fontId == None:
@@ -2554,7 +2441,7 @@ class AnimatedGif:
 
         cmdCreateGif += '"%s"' % fileName
 
-        out, err = RunProcess(cmdCreateGif, self.callback, returnOutput=True)
+        _out, err = RunProcess(cmdCreateGif, self.callback, returnOutput=True)
 
         if not os.path.exists(fileName) or os.path.getsize(fileName) == 0:
             logging.error(err)
@@ -2590,7 +2477,7 @@ class AnimatedGif:
             cmdChangeGifTiming += " ( -clone %d -set delay %d ) -swap %d,-1 +delete " % (frameIdx, frameMs / 10, frameIdx)
 
         cmdChangeGifTiming += ' "%s"' % (fileName)
-        out, err = RunProcess(cmdChangeGifTiming, self.callback, returnOutput=True)
+        RunProcess(cmdChangeGifTiming, self.callback, returnOutput=True)
 
     def OptimizeGif(self, fileName):
         # Run optimizer
@@ -2605,7 +2492,7 @@ class AnimatedGif:
                 fileName,
             )
 
-            out, err = RunProcess(cmdOptimizeGif, self.callback, returnOutput=True)
+            RunProcess(cmdOptimizeGif, self.callback, returnOutput=True)
 
             afterSize = self.GetSize()
 
@@ -2623,17 +2510,6 @@ class AnimatedGif:
 
     def PreviewFileExists(self):
         return os.path.exists(self.GetPreviewImagePath())
-
-    def GetPreviewLastModifiedTs(self):
-        if self.PreviewFileExists():
-            return os.stat(self.GetPreviewImagePath()).st_mtime
-        else:
-            return 0
-
-    def GetTotalRuntimeSec(self):
-        secPerFrame = (self.GetGifFrameDelay() * 10) / 1000.0
-        totalSec = secPerFrame * self.GetNumFrames()
-        return totalSec
 
     def GetGifFrameDelay(self, modifyer=None):
         if modifyer is None:
@@ -2707,10 +2583,6 @@ class GifPlayerWidget(Label):
 
         self.currW = self.winfo_width()
         self.currH = self.winfo_height()
-
-    def GetInfo(self):
-        width, height = self.images[0].size
-        return "Dimensions: %dx%d" % (width, height)
 
     def Stop(self):
         self.after_cancel(self.cancel)
@@ -2788,12 +2660,6 @@ class GifApp:
         self.maskEdited = False
         self.trackBarTs = 0
 
-        # self.cropWidth            = "0"
-        # self.cropHeight           = "0"
-        # self.cropStartX           = "0"
-        # self.cropStartY           = "0"
-        # self.finalSize            = "0x0"
-
         # DPI scaling
         # On Windows with Python 3/Tk9 the process is DPI-aware, so we must query
         # the actual display DPI — hardcoding 96 made the window too small on HiDPI.
@@ -2801,7 +2667,7 @@ class GifApp:
         if ImAPC():
             try:
                 dpi = ctypes.windll.user32.GetDpiForSystem()
-            except Exception:
+            except (AttributeError, OSError):
                 dpi = 96
         else:
             dpi = 96
@@ -2854,14 +2720,12 @@ class GifApp:
                 icon = PIL.ImageTk.PhotoImage(PIL.Image.open("instagiffer.icns"))
                 self.parent.wm_iconphoto(True, icon)
                 self._app_icon = icon  # prevent GC
-            except Exception:
+            except (OSError, TclError):
                 pass
 
         frame = Frame(parent)
         frame.pack()
         self.mainFrame = frame
-
-        # self.parent.protocol("WM_DELETE_WINDOW", self.OnWindowClose)
 
         #
         # GUI config. OS-dependant
@@ -2941,9 +2805,8 @@ class GifApp:
         self.frameMenu.add_command(label="Export Frames...", underline=0, command=self.OnExportFrames)
         self.frameMenu.add_command(label="Import Frames...", underline=0, command=self.OnImportFrames)
         self.frameMenu.add_command(label="Manual Crop...", underline=7, command=self.OnManualSizeAndCrop)
-        # self.frameMenu.add_command(label="Edit Mask...",            underline=5, command=self.OnEditMask)
         self.frameEffectsMenu = Menu(self.frameMenu, tearoff=0)
-        self.frameEffectsMenu.add_command(label="Make It Loop!", underline=8, command=self.OnForwardReverseLoop)
+        self.frameEffectsMenu.add_command(label="Boomerang", underline=0, command=self.OnForwardReverseLoop)
         self.frameEffectsMenu.add_command(label="Reverse", underline=8, command=self.OnReverseFrames)
         self.frameEffectsMenu.add_command(label="Crossfade...", underline=8, command=self.OnCrossFade)
         self.frameMenu.add_cascade(label="Frame Effects", underline=0, menu=self.frameEffectsMenu)
@@ -3020,10 +2883,6 @@ class GifApp:
 
         # Progress bar
         #######################################################################
-
-        # s = ttk.Style()
-        # s.theme_use()
-        # s.configure("red.Horizontal.TProgressbar", foreground='#395976', background='#395976')
 
         self.progressBar = ttk.Progressbar(
             parent,
@@ -3441,8 +3300,6 @@ class GifApp:
             fg=valueFontColor,
             showvalue=1,
         )
-        # self.sclBright.bind('<Double-Button-1>', self.SnapResetBrightness)
-
         self.lblBright.grid(row=rowIdx, column=0, sticky=W, padx=padding, pady=padding)
         self.sclBright.grid(
             row=rowIdx,
@@ -3571,8 +3428,6 @@ class GifApp:
         self.lblEffects.grid(row=rowIdx, column=0, sticky=W, padx=padding, pady=padding)
         self.btnEditEffects.grid(row=rowIdx, column=1, columnspan=4, sticky="EW", padx=padding, pady=padding)
 
-        # padding =  # Restore padding
-
         rowIdx += 1
 
         self.btnGenerateGif = Button(
@@ -3691,7 +3546,7 @@ class GifApp:
     def ForceSingleInstance(self):
         # Enforced by plist setting in Mac
         if ImAPC():
-            import win32api
+            import win32api  # pylint: disable=redefined-outer-name
             from win32event import CreateMutex
             from winerror import ERROR_ALREADY_EXISTS
 
@@ -3721,7 +3576,7 @@ class GifApp:
             try:
                 if os.path.exists(self.tempDir):
                     shutil.rmtree(self.tempDir)
-            except Exception as e:
+            except OSError:
                 self.Alert(
                     "Delete Failed",
                     "I was unable to delete Instagiffer's temporary files. Please delete the following folder manually:\n\n" + self.tempDir,
@@ -3847,14 +3702,10 @@ class GifApp:
     def OnDurationChanged(self):
         self.RestartTimer()
 
-        retVal = True
-
         try:
-            duration = float(self.duration.get())
-            if duration < 0.1:
-                retVal = False
+            float(self.duration.get())
         except ValueError:
-            retVal = False
+            pass
 
         return True
 
@@ -3875,12 +3726,6 @@ class GifApp:
         self.spnStartTimeMilli.insert(0, "0")
 
     def OnStartSliderUpdated(self, unknown):
-        # if self.gif is not None:
-        #     if self.gif.GetThumbAge() > 0.9:
-        #         self.gif.GetVideoThumb(self.GetStartTimeString(), self.canvasSize)
-        #         if self.gif.ThumbFileExists():
-        #             self.ShowImageOnCanvas(self.gif.GetThumbImagePath())
-
         self.TrackbarToTimeFields()
         self.OnStartChanged()
         return True
@@ -4070,7 +3915,7 @@ class GifApp:
 
             try:
                 img = self.thumbNailCache[imgPath]
-            except:
+            except KeyError:
                 logging.error("Thumbnail cache miss: %s. Marking thumbnail cache as stale" % imgPath)
                 self.thumbNailsUpdatedTs = -3
                 return
@@ -4106,7 +3951,6 @@ class GifApp:
         if lateByMs < 80 and lateByMs > frameDelayMs:
             skipFrame = 1 + int(round(lateByMs / float(frameDelayMs)))
             self.trackBarTs = time.time()
-            # logging.info("late by %d ms (frame delay %d) frames %f" %(lateByMs, frameDelayMs, skipFrame))
             return skipFrame
         elif since < 0 or since > frameDelayMs:
             self.trackBarTs = time.time()
@@ -4144,8 +3988,6 @@ class GifApp:
         return self.thumbnailIdx
 
     def SetThumbNailIndex(self, idx=None):
-        trackBarPos = 0
-
         if idx == None:
             idx = self.thumbnailIdx
 
@@ -4169,7 +4011,7 @@ class GifApp:
         if self.gif.GetNumFrames() == self.thumbnailIdx:
             isLastFrame = True
 
-        ret = self.DeleteFrame(self.thumbnailIdx, self.thumbnailIdx)
+        self.DeleteFrame(self.thumbnailIdx, self.thumbnailIdx)
 
         #  Issue #157
         if isLastFrame and self.gif.GetNumFrames() > 0:
@@ -4223,13 +4065,13 @@ class GifApp:
 
     def GetCropSettingsFromCanvas(self, isScaled=True, doRounding=True):
         if len(self.canCropTool.find_withtag("cropRect")) <= 0:
-            raise Exception("Cropper has not been initialized yet")
+            raise RuntimeError("Cropper has not been initialized yet")
 
         if len(self.canCropTool.find_withtag("preview")) > 0:
-            raise Exception("Preview being displayed. Wait..")
+            raise RuntimeError("Preview being displayed. Wait..")
 
         cx, cy, cx2, cy2 = self.canCropTool.coords("cropRect")
-        px, py, px2, py2 = self.canCropTool.coords("videoScale")
+        px, py, _px2, _py2 = self.canCropTool.coords("videoScale")
 
         videoWidth = self.gif.GetVideoWidth()
         videoHeight = self.gif.GetVideoHeight()
@@ -4296,9 +4138,9 @@ class GifApp:
 
     def OnCropUpdate(self, unused=None):
         try:
-            sx, sy, sw, sh, smaxw, smaxh, sratio = self.GetCropSettingsFromCanvas(True)
-            x, y, w, h, maxw, maxh, ratio = self.GetCropSettingsFromCanvas(False)
-        except:
+            _sx, _sy, sw, sh, _smaxw, _smaxh, sratio = self.GetCropSettingsFromCanvas(True)
+            x, y, w, h, _maxw, _maxh, _ratio = self.GetCropSettingsFromCanvas(False)
+        except Exception:  # pylint: disable=broad-exception-caught
             return
 
         self.SnapCropperHandles()
@@ -4314,7 +4156,7 @@ class GifApp:
     def OnCropMove(self, event):
         cx, cy, cx2, cy2 = self.canCropTool.coords("cropRect")
         px, py, px2, py2 = self.canCropTool.coords("videoScale")
-        mx, my, mx2, my2 = self.canCropTool.coords("cropMove")
+        mx, my, _mx2, _my2 = self.canCropTool.coords("cropMove")
 
         deltaX = (event.x - mx) - self.cropSizerSize // 2
         deltaY = (event.y - my) - self.cropSizerSize // 2
@@ -4339,7 +4181,7 @@ class GifApp:
 
     def OnCropSizeTLImpl(self, freezeX, event):
         cx, cy, cx2, cy2 = self.canCropTool.coords("cropRect")
-        px, py, px2, py2 = self.canCropTool.coords("videoScale")
+        px, py, _px2, _py2 = self.canCropTool.coords("videoScale")
         sx, sy, sx2, sy2 = self.canCropTool.coords("cropSizeTL")
 
         deltaX = event.x - sx
@@ -4368,7 +4210,7 @@ class GifApp:
 
     def OnCropSizeBRImpl(self, freezeY, event):
         cx, cy, cx2, cy2 = self.canCropTool.coords("cropRect")
-        px, py, px2, py2 = self.canCropTool.coords("videoScale")
+        _px, _py, px2, py2 = self.canCropTool.coords("videoScale")
         sx, sy, sx2, sy2 = self.canCropTool.coords("cropSizeBR")
 
         deltaX = event.x - sx
@@ -4506,7 +4348,6 @@ class GifApp:
 
     def ResetInputs(self):
         self.canCropTool.delete("all")  # Clear off the crop tool
-        # if not self.gif.ExtractedImagesExist():
         self.InitializeCropTool()
 
         self.maskEventList = []  # Remove all mask edits
@@ -4556,13 +4397,6 @@ class GifApp:
             retVal = False
         if not self.startTimeMilli.get().isdigit() or int(self.startTimeMilli.get()) < 0 or int(self.startTimeMilli.get()) > 9:
             retVal = False
-
-        # try:
-        #     duration = float(self.duration.get())
-        #     if duration < 0.1:
-        #         retVal = False
-        # except ValueError:
-        #     retVal = False
 
         return retVal
 
@@ -4947,7 +4781,7 @@ class GifApp:
                     self.SetStatus("%d/%d were duplicates. Delete: %s" % (numDups, frameCount, str(deleteDupFrames)))
 
                 if not self.gif.SourceIsVideo() and frameCount > 20 and frameCount - 1 == numDups:
-                    raise Exception(
+                    raise RuntimeError(
                         "How boring! All of your frames are exactly the same! Note: If you're looking a black/blank image, try screen capturing on your other monitor - it's a known issue."
                     )
 
@@ -4991,7 +4825,7 @@ class GifApp:
 
                 self.SetStatus("Done")
 
-        except Exception as e:
+        except Exception as e:  # pylint: disable=broad-exception-caught
             self.guiBusy = True
             errorMsg = str(e)
             logging.error(errorMsg)
@@ -4999,7 +4833,6 @@ class GifApp:
             # Yuck. We get this if user kills the app with the X while the GUI is busy.
             # Intercept the nasty error message and avoid awkward app shutdown by forcing the app to close now
             if "invalid command name" in errorMsg:
-                # self.parent.quit()
                 raise SystemExit
 
             processOk = False
@@ -5016,7 +4849,6 @@ class GifApp:
                 "%s" % errorMsg,
             )
 
-            # logging.error(traceback.format_exception(*sys.exc_info()))
             self.guiBusy = False
 
         if processOk and processStages >= 3 and not preview:
@@ -5032,7 +4864,7 @@ class GifApp:
             elif len(self.gif.GetProcessedImageList()) == 0:
                 self.Alert(
                     "Frames Not Found",
-                    "Processed %s frames not found" % (self.GetIntermediaryFrameFormat()),
+                    "Processed %s frames not found" % (self.gif.GetIntermediaryFrameFormat()),
                 )
             else:
                 self.SetStatus("GIF saved. GIF size: " + str(round(self.gif.GetSize() / 1024)) + "kB. Path: " + self.gif.GetLastGifOutputPath())
@@ -5143,7 +4975,7 @@ class GifApp:
 
             try:
                 logging.info("Open returned: " + str(fileNames) + " (%s)" % (type(fileNames)))
-            except:
+            except (UnicodeDecodeError, UnicodeEncodeError):
                 logging.info("Failed to decode value returned by Open dialog")
 
             if fileNames is None:
@@ -5179,7 +5011,7 @@ class GifApp:
             try:
                 self.gif = AnimatedGif(self.conf, fileName, self.tempDir, self.OnShowProgress, self.parent)
 
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-exception-caught
                 self.gif = None
                 rc = False
                 errStr = str(e)
@@ -5211,11 +5043,9 @@ class GifApp:
 
                 # Set the trackbar properties
                 trackbarTo = 1
-                durationMax = 1
 
                 if self.gif.GetVideoLengthSec() > 1.0:
                     trackbarTo = int(self.gif.GetVideoLengthSec())
-                    durationMax = int(self.gif.GetVideoLengthSec())
 
                 self.spnDuration.config(to=trackbarTo)
                 self.spnDuration.config(wrap=True)
@@ -5271,7 +5101,6 @@ class GifApp:
         dlg.lift()
         dlg.focus()
         dlg.grab_set()
-        # self.guiBusy = True
 
     def WaitForChildDialog(self, dlg, dlgGeometry=None, focus_widget=None):
         # Position over parent window before showing
@@ -5325,7 +5154,7 @@ class GifApp:
         def OnDeletePlayer():
             try:
                 anim.Stop()
-            except:
+            except Exception:  # pylint: disable=broad-exception-caught
                 pass
 
             popupWindow.grab_release()
@@ -5353,15 +5182,6 @@ class GifApp:
     def OnCaptionSelect(self, *args):
         if not self.guiBusy:
             self.OnCaptionConfig()
-
-    def GetFamilyList(self):
-        return sorted(self.fonts.keys())
-
-    def GetFontAttributeList(self, fontFamily):
-        return sorted(self.fonts[fontFamily].keys(), reverse=True)
-
-    def GetFontId(self, fontFamily, fontStyle):
-        return self.fonts[fontFamily][fontStyle]
 
     def OnScreenCapture(self):
         # On macOS, verify screen recording permission before showing the dialog
@@ -5450,8 +5270,6 @@ class GifApp:
             h = lblResizeWindow.winfo_height()
             w = lblResizeWindow.winfo_width()
 
-            # print ww,wh,h,w
-
             if ww < w:
                 w = ww - 2
 
@@ -5466,7 +5284,7 @@ class GifApp:
             return w, h, ww, wh
 
         def OnResize(event):
-            w, h, ww, wh = GetCaptureDimensions()
+            w, h, _ww, _wh = GetCaptureDimensions()
 
             dimensionStr = "%dx%d" % (w, h)
 
@@ -5535,7 +5353,7 @@ class GifApp:
                 self.Alert("Invalid Duration", "Duration must be at least 1 second")
                 return False
 
-            w, h, ww, wh = GetCaptureDimensions()
+            w, h, _ww, _wh = GetCaptureDimensions()
             x = lblResizeWindow.winfo_rootx()
             y = lblResizeWindow.winfo_rooty()
 
@@ -6155,7 +5973,7 @@ class GifApp:
 
         tooltips = {
             sclStartFrame: "Set the position in your GIF where you want the frames to be imported. Importing at frame 0 will import frames before the first frame.",
-            chkImportReversed: "Import frames in reverse order. Handy for making bouncing loops (a->b->a). Also known as patrol loops, forward-reverse loops, boomerangs or symmetric loops.",
+            chkImportReversed: "Import frames in reverse order. Handy for making boomerang loops (a->b->a).",
             chkRiffleShuffle: "Interleave imported frames with existing frames.",
             chkStretch: "Stretch to fit. Otherwise maintain aspect ratio. You may end up with black bars if your images don't have similar sizes.",
             chkBlankFrame: "Import blank (black) frames.",
@@ -6238,8 +6056,8 @@ class GifApp:
             return False
 
         try:
-            sx, sy, sw, sh, smaxw, smaxh, sratio = self.GetCropSettingsFromCanvas(True)
-        except:
+            sx, sy, sw, sh, smaxw, smaxh, _sratio = self.GetCropSettingsFromCanvas(True)
+        except Exception:  # pylint: disable=broad-exception-caught
             return False
 
         cropX = StringVar()
@@ -6349,13 +6167,13 @@ class GifApp:
 
         def OnCropChange(*args):
             try:
-                sx, sy, sw, sh, smaxw, smaxh, sratio = self.GetCropSettingsFromCanvas(True, False)
-            except:
+                sx, sy, _sw, _sh, smaxw, smaxh, _sratio = self.GetCropSettingsFromCanvas(True, False)
+            except Exception:  # pylint: disable=broad-exception-caught
                 logging.error("Failed to get cropper settings from canvas")
                 return False
 
             # Video port coords
-            px, py, px2, py2 = self.canCropTool.coords("videoScale")
+            px, py, _px2, _py2 = self.canCropTool.coords("videoScale")
 
             # Boundary checks
             iw = float(cropWidth.get())
@@ -6406,7 +6224,7 @@ class GifApp:
     # Bouncing Loop
     def OnForwardReverseLoop(self):
         if self.gif is None or self.gif.GetNumFrames() <= 2:
-            self.Alert("Unable to Make Loop", "You don't have enough frames to do this")
+            self.Alert("Unable to Boomerang", "You don't have enough frames to do this")
             return False
 
         self.gif.ReEnumerateExtractedFrames()
@@ -6418,11 +6236,11 @@ class GifApp:
             False,
             False,
         ):
-            self.SetStatus("Generated forward-reverse loop")
+            self.SetStatus("Generated boomerang loop")
             self.UpdateThumbnailPreview()  # We have new frames
         else:
             self.Alert(
-                "Unable to Make Loop",
+                "Unable to Boomerang",
                 "Something weird happened. I couldn't loop this thing :(",
             )
 
@@ -6481,7 +6299,8 @@ class GifApp:
             length=275,
             showvalue=1,
         )
-        sclEndFrame.set(numFrames)
+        sclStartFrame.set(numFrames)
+        sclEndFrame.set(1)
         btnCreateFade = Button(dlg, text="Generate Crossfade", padx=4, pady=4)
 
         lblStartFrame.grid(row=0, column=0, sticky=W, padx=4, pady=4)
@@ -6491,8 +6310,8 @@ class GifApp:
         btnCreateFade.grid(row=2, column=0, sticky=EW, padx=4, pady=4, columnspan=2)
 
         tooltips = {
-            sclStartFrame: "Frame to start crossfade. If greater than end frame, crossfade will loop around. To make cross fade effective, make sure you include an equal number of frames on either side of the transition point.",
-            sclEndFrame: "Frame to end crossfade",
+            sclStartFrame: "Frame where the crossfade begins. For a seamless loop, set this near the end of your clip. When start > end, the crossfade wraps around and blends the end of the clip into the beginning.",
+            sclEndFrame: "Frame where the crossfade ends. For a seamless loop, set this near the beginning of your clip.",
         }
 
         for item, tipString in tooltips.items():
@@ -6518,8 +6337,6 @@ class GifApp:
         def OnSetFramePosition(newIdx):
             self.SetThumbNailIndex(int(newIdx))
             self.UpdateThumbnailPreview()
-            start = int(sclStartFrame.get())
-            end = int(sclEndFrame.get())
             return True
 
         btnCreateFade.configure(command=OnCreateFadeClicked)
@@ -6651,13 +6468,12 @@ class GifApp:
             if len(self.maskEventList) <= deleteChunk:
                 self.maskEventList = []
             elif len(self.maskEventList) > deleteChunk:
-                for x in range(0, deleteChunk):
+                for _ in range(0, deleteChunk):
                     del self.maskEventList[-1]
 
             WriteToCanvas()
 
         def OnPaint(event):
-            paintBrushSize = brushSize.get() * 2
             saveEvent = [event.x, event.y, brushSize.get()]
             self.maskEdited = True  # To let GUI know
             self.maskEventList.append(saveEvent)
@@ -6690,7 +6506,7 @@ class GifApp:
             else:
                 try:
                     os.remove(self.gif.GetMaskFileName(0))
-                except:
+                except OSError:
                     pass
 
             dlg.destroy()
@@ -6739,8 +6555,6 @@ class GifApp:
         newFxHash = ""
         for param in allFx:
             newFxHash += str(param.get())
-            # if args[0] == str(param):
-            #     logging.info("Effect Change. New value: " + str(param.get()) )
 
         if not self.guiBusy and (newFxHash != self.fxHash or self.maskEdited):
             self.fxHash = newFxHash
@@ -6912,7 +6726,7 @@ class GifApp:
             return ret
 
         def OnSelectTintColor():
-            colorRgb, colorHex = askcolor(
+            _colorRgb, colorHex = askcolor(
                 parent=self.parent,
                 initialcolor=self.colorTintColor.get(),
                 title="Choose Tint Color",
@@ -6921,7 +6735,7 @@ class GifApp:
             return True
 
         def OnSelectBorderColor():
-            colorRgb, colorHex = askcolor(
+            _colorRgb, colorHex = askcolor(
                 parent=self.parent,
                 initialcolor=self.borderColor.get(),
                 title="Choose Border Color",
@@ -6971,13 +6785,13 @@ class GifApp:
 
             try:
                 positionIdx = positions.index(self.conf.GetParam("captiondefaults", "position"))
-            except:
+            except ValueError:
                 positionIdx = 7
 
             try:
                 styleList = fonts.GetFontAttributeList(self.conf.GetParam("captiondefaults", "captionFont"))
                 styleIdx = styleList.index(self.conf.GetParam("captiondefaults", "fontStyle"))
-            except:
+            except (ValueError, KeyError):
                 styleIdx = 0
 
             self.OnCaptionConfigDefaults["defaultFontSize"] = self.conf.GetParam("captiondefaults", "fontSize")
@@ -7069,7 +6883,6 @@ class GifApp:
 
         # Row 5: Outline + Shadow
         lblOutline = Label(captionDlg, font=self.defaultFont, text="Outline")
-        lblOutlineSize = Label(captionDlg, font=self.defaultFont, text="Size")
         outlineThickness = IntVar()
         spnCaptionFontOutlineSize = Spinbox(
             captionDlg,
@@ -7313,7 +7126,7 @@ class GifApp:
             return True
 
         def OnSelectCaptionColor():
-            colorRgb, colorHex = askcolor(
+            _colorRgb, colorHex = askcolor(
                 parent=self.parent,
                 initialcolor=lblFontPreview["fg"],
                 title="Choose Caption Color",
@@ -7578,10 +7391,6 @@ def tkErrorCatcher(self, *args):
 
         if openBugReport:
             OpenFileWithDefaultApp(GetLogPath())
-    # else:
-    # raise SystemExit
-
-    # self.quit()
 
 
 class InstaCommandLine:
@@ -7660,7 +7469,7 @@ def main():
 
         logging.getLogger().addFilter(_FlushFilter())
 
-    except:
+    except (OSError, ValueError):
         # Oh well. no logging!
         pass
 
@@ -7694,7 +7503,7 @@ def main():
                     m = re.search(r"SOFTWARE LICENSE AGREEMENT FOR (macOS \S+)", line)
                     if m:
                         return f"{m.group(1)} {ver}"
-        except Exception:
+        except OSError:
             pass
         return f"macOS {ver}"
 
@@ -7706,12 +7515,7 @@ def main():
 
     root = Tk()
     logging.info("Tk: %s", root.tk.call("info", "patchlevel"))
-    if ImAPC():
-        try:
-            dpi = ctypes.windll.user32.GetDpiForSystem()
-            logging.info("DPI: %d (scaling %.3f)", dpi, dpi / 72.0)
-        except Exception:
-            pass
+    GetDisplayScaleFactor()
 
     GifApp(root, None, configPath=cmdline.configPath)
 

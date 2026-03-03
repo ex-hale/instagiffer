@@ -21,8 +21,7 @@ p = lambda *parts: os.path.join(ROOT, *parts)
 datas = [
     (p("instagiffer.conf"), "."),
     (p("instagiffer.ico"), "."),
-    (p("release/uninstall.ico"), "."),
-    (p("deps/win"), "deps/win"),
+(p("deps/win"), "deps/win"),
 ]
 
 a = Analysis(

@@ -11,6 +11,8 @@ InstagifferAutomator is an alias for the current platform's implementation:
   WindowsInstagifferAutomator — Windows, uses pywinauto
 """
 
+# pylint: disable=possibly-used-before-assignment,broad-exception-caught
+
 import configparser
 import os
 import re
@@ -18,12 +20,36 @@ import subprocess
 import sys
 import time
 from abc import ABC, abstractmethod
+from pathlib import Path
 
-_PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, _PROJECT_DIR)
 from instagiffer import GetAppSupportDir, GetLogPath
 
+_PROJECT_DIR = str(Path(__file__).resolve().parent.parent)
 _TEST_DATA_DIR = os.path.join(_PROJECT_DIR, "test", "test_data")
+
+# Windows-only imports. pywinauto initialises COM (STA) at import time, so these
+# MUST be deferred until after the subprocess has started — see _init_win32().
+if sys.platform == "win32":
+    import win32con
+    import win32gui
+    import win32process
+    import pyperclip
+
+    # Placeholders; populated by _init_win32() after subprocess launch.
+    Desktop = None  # type: ignore[assignment]
+    send_keys = None  # type: ignore[assignment]
+
+    def _init_win32():
+        """Lazily import pywinauto (triggers COM init) and stash in module globals."""
+        global Desktop, send_keys
+        if Desktop is not None:
+            return
+        from pywinauto import Desktop as _Desktop
+        from pywinauto.keyboard import send_keys as _send_keys
+
+        Desktop = _Desktop
+        send_keys = _send_keys
+
 
 # Log path for frozen builds; GetLogPath() returns the dev-source path when run unfrozen.
 _FROZEN_LOG_PATH = os.path.join(GetAppSupportDir(), "logs", "instagiffer-event.log")
@@ -37,9 +63,6 @@ _KEY_DOWN = 125
 _KEY_UP = 126
 
 
-# -- Exceptions --
-
-
 class AutomationError(Exception):
     pass
 
@@ -47,9 +70,6 @@ class AutomationError(Exception):
 class AutomationTimeoutError(AutomationError):
     def __init__(self, operation, timeout):
         super().__init__(f"{operation} timed out after {timeout}s")
-
-
-# -- Base class --
 
 
 class _AutomatorBase(ABC):
@@ -72,8 +92,6 @@ class _AutomatorBase(ABC):
 
     def __exit__(self, *exc):
         self.quit()
-
-    # -- Subprocess --
 
     def terminate(self, timeout=5):
         if self.process is None or self.process.poll() is not None:
@@ -110,8 +128,6 @@ class _AutomatorBase(ABC):
             check=False,
         )
 
-    # -- Launch --
-
     @classmethod
     def _setup_frozen(cls, app_path, kwargs):
         """Configure kwargs for a frozen app bundle. Override per platform."""
@@ -139,8 +155,6 @@ class _AutomatorBase(ABC):
         instance._post_launch()
         return instance
 
-    # -- Window management (abstract) --
-
     @abstractmethod
     def activate(self): ...
 
@@ -162,8 +176,6 @@ class _AutomatorBase(ABC):
 
     @abstractmethod
     def get_window_size(self, title=None): ...
-
-    # -- Input (abstract) --
 
     @abstractmethod
     def send_keystroke(self, key, modifiers=None): ...
@@ -188,8 +200,6 @@ class _AutomatorBase(ABC):
                 self.process.wait(timeout=timeout)
             except subprocess.TimeoutExpired:
                 self.terminate()
-
-    # -- Log observation --
 
     def read_event_log(self):
         if not os.path.exists(self.log_path):
@@ -230,11 +240,6 @@ class _AutomatorBase(ABC):
         assert matches, f"No log line matching /{pattern}/ (after line {after_line})"
         return matches
 
-    def assert_log_not_contains(self, pattern, after_line=0):
-        """Assert no log lines match the regex pattern."""
-        matches = self.get_log_lines(pattern, after_line=after_line)
-        assert not matches, f"Unexpected log line matching /{pattern}/: {matches[0]}"
-
     def wait_for_log(self, pattern, timeout=30, after_line=0):
         """Poll the log until a line matching the regex pattern appears."""
         deadline = time.time() + timeout
@@ -244,8 +249,6 @@ class _AutomatorBase(ABC):
                 return matches[-1]
             time.sleep(self.poll_interval)
         raise AutomationTimeoutError(f"wait_for_log('{pattern}')", timeout)
-
-    # -- High-level actions --
 
     def load_video(self, path_or_url, timeout=30):
         self.activate()
@@ -320,9 +323,6 @@ class _AutomatorBase(ABC):
         while time.time() < deadline:
             assert not any("Bug Report" in n for n in self.get_window_names()), "Bug Report error dialog appeared"
             time.sleep(self.poll_interval)
-
-
-# -- macOS: AppleScript / System Events --
 
 
 class AppleScriptError(AutomationError):
@@ -413,8 +413,6 @@ class MacInstagifferAutomator(_AutomatorBase):
         self._tell(script)
 
 
-# -- Windows: pywinauto --
-
 # Map Mac key codes → pywinauto send_keys sequences
 _WIN_KEYCODES = {
     _KEY_RETURN: "{ENTER}",
@@ -435,14 +433,16 @@ _WIN_MODIFIERS = {
 # send_keys special characters that must be escaped with {}
 _SEND_KEYS_SPECIAL = set("^+%~{}()")
 
+# Delay between menu keystrokes (Win32 menu animation needs time to render)
+_MENU_DELAY = 0.15
+
 
 class WindowsInstagifferAutomator(_AutomatorBase):
     """Drive Instagiffer's GUI via pywinauto on Windows."""
 
     @property
     def _desktop(self):
-        from pywinauto import Desktop
-
+        _init_win32()
         return Desktop(backend="win32")
 
     def _post_launch(self):
@@ -458,8 +458,6 @@ class WindowsInstagifferAutomator(_AutomatorBase):
                 return win
         raise AutomationError(f"Main window starting with '{self.app_title}' not found; windows={self.get_window_names()}")
 
-    # -- Window management --
-
     def _topmost_app_window(self):
         """Return the topmost visible window belonging to our app process.
 
@@ -467,9 +465,6 @@ class WindowsInstagifferAutomator(_AutomatorBase):
         the real PID via the main window title, then walk Desktop.windows() in Z-order.
         Application.top_window() is not used because it omits Tk Toplevel dialogs.
         """
-        import win32gui
-        import win32process
-
         all_desktop = self._desktop.windows()
 
         actual_pid = None
@@ -512,15 +507,12 @@ class WindowsInstagifferAutomator(_AutomatorBase):
 
     def _force_foreground(self):
         """Minimize+restore to bring the window to foreground (bypasses Windows focus-stealing block)."""
-        try:
-            win = self._topmost_app_window()
-            if win is None:
-                return
-            if not win.is_minimized():
-                win.minimize()
-            win.restore()
-        except Exception as e:
-            print(f"[automation] _force_foreground: {e}")
+        win = self._topmost_app_window()
+        if win is None:
+            return
+        if not win.is_minimized():
+            win.minimize()
+        win.restore()
 
     def _wait_for_window_size(self, min_width=400, timeout=5):
         """Poll until the main window is at least min_width px wide (Tk re-draws asynchronously after restore)."""
@@ -533,22 +525,18 @@ class WindowsInstagifferAutomator(_AutomatorBase):
             except Exception:
                 pass
             time.sleep(self.poll_interval)
-        print(f"[automation] _wait_for_window_size: window never reached {min_width}px wide")
 
     def activate(self):
         """Focus the topmost visible app window (dialog or main).
 
         Uses Desktop.windows() not Application.top_window(), which omits Tk Toplevel dialogs.
         """
-        try:
-            win = self._topmost_app_window()
-            if win is None:
-                return
-            if win.is_minimized():
-                win.restore()
-            win.set_focus()
-        except Exception as e:
-            print(f"[automation] activate: {e}")
+        win = self._topmost_app_window()
+        if win is None:
+            return
+        if win.is_minimized():
+            win.restore()
+        win.set_focus()
 
     def open_effects(self):
         """Open the Filters dialog, then explicitly set focus so Tk settles on chkSharpen.
@@ -581,30 +569,21 @@ class WindowsInstagifferAutomator(_AutomatorBase):
                 return r.width(), r.height()
         raise AutomationError(f"Window containing '{title}' not found")
 
-    # -- Input --
-
     def send_keystroke(self, key, modifiers=None):
-        from pywinauto.keyboard import send_keys
-
         prefix = "".join(_WIN_MODIFIERS.get(m, "") for m in (modifiers or []))
         if prefix:
             send_keys(f"{prefix}{key}")
         else:
             # Typing plain text — escape send_keys special characters
             escaped = "".join(f"{{{c}}}" if c in _SEND_KEYS_SPECIAL else c for c in key)
-            send_keys(escaped, with_spaces=True)
+            send_keys(escaped)
 
     def send_key_code(self, code, modifiers=None):
-        from pywinauto.keyboard import send_keys
-
         key = _WIN_KEYCODES[code]
         prefix = "".join(_WIN_MODIFIERS.get(m, "") for m in (modifiers or []))
-        send_keys(f"{prefix}{key}", with_spaces=True)
+        send_keys(f"{prefix}{key}")
 
     def paste_text(self, value):
-        import pyperclip
-        from pywinauto.keyboard import send_keys
-
         self.activate()
         pyperclip.copy(value)
         send_keys("^a^v")
@@ -612,26 +591,16 @@ class WindowsInstagifferAutomator(_AutomatorBase):
     def close_preview(self, timeout=10):
         """Close the GIF preview dialog by sending Enter directly to its window handle."""
         self.wait_for_window("GIF Preview", timeout=timeout)
-        try:
-            dlg_list = [w for w in self._desktop.windows() if "GIF Preview" in w.window_text()]
-            if not dlg_list:
-                raise AutomationError("GIF Preview window not found via Desktop")
-            dlg_list[0].set_focus()
-            dlg_list[0].type_keys("{ENTER}")
-        except AutomationError:
-            raise
-        except Exception as e:
-            print(f"[automation] close_preview: type_keys failed ({e}), falling back to global send_keys")
-            from pywinauto.keyboard import send_keys
-
-            send_keys("{ENTER}", with_spaces=True)
+        dlg_list = [w for w in self._desktop.windows() if "GIF Preview" in w.window_text()]
+        if not dlg_list:
+            raise AutomationError("GIF Preview window not found")
+        dlg_list[0].set_focus()
+        dlg_list[0].type_keys("{ENTER}")
         deadline = time.time() + timeout
         while time.time() < deadline:
             if not self.window_exists("GIF Preview"):
-                time.sleep(0.5)  # buffer for Tk to settle and re-raise main window
                 return
             time.sleep(self.poll_interval)
-        print("[automation] close_preview: timed out waiting for GIF Preview to close")
 
     def click_menu(self, *menu_path):
         """Navigate a menu via keyboard (Tk menus are owner-drawn; menu_select() cannot read them).
@@ -639,23 +608,35 @@ class WindowsInstagifferAutomator(_AutomatorBase):
         Alt + first char opens the top-level menu (all menus use underline=0), then the first
         char of each item selects it.
         """
-        from pywinauto.keyboard import send_keys
-
-        try:
-            self._main_window().set_focus()
-        except Exception as e:
-            print(f"[automation] click_menu: set_focus failed: {e}")
-        time.sleep(0.1)
+        self._main_window().set_focus()
+        time.sleep(_MENU_DELAY)
         send_keys(f"%{menu_path[0][0].lower()}")
-        time.sleep(0.15)
+        time.sleep(_MENU_DELAY)
         for item in menu_path[1:]:
-            send_keys(item[0].lower(), with_spaces=True)
-            time.sleep(0.1)
+            send_keys(item[0].lower())
+            time.sleep(_MENU_DELAY)
+
+    def quit(self, timeout=5):
+        """Quit by sending WM_CLOSE to the main window handle.
+
+        Keyboard menu navigation (Alt+F, E) is unreliable after closing external
+        windows like Notepad — Windows doesn't always route keystrokes to the Tk
+        window even after set_focus / _force_foreground.  PostMessage(WM_CLOSE)
+        goes directly to the HWND and always works.
+        """
+        try:
+            win = self._main_window()
+            win32gui.PostMessage(win.handle, win32con.WM_CLOSE, 0, 0)
+        except Exception:
+            pass
+        if self.process:
+            try:
+                self.process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired:
+                self.terminate()
 
     def generate_bug_report(self, timeout=8):
         """Click Help > Generate Bug Report, assert no error dialog, then close the text editor."""
-        from pywinauto.keyboard import send_keys
-
         before_handles = {w.handle for w in self._desktop.windows()}
         super().generate_bug_report()
 
@@ -674,13 +655,8 @@ class WindowsInstagifferAutomator(_AutomatorBase):
             time.sleep(self.poll_interval)
 
         if editor_win:
-            try:
-                editor_win.set_focus()
-                send_keys("%{F4}")
-            except Exception as e:
-                print(f"[automation] generate_bug_report: failed to close editor: {e}")
-        else:
-            print("[automation] generate_bug_report: no editor window found to close")
+            editor_win.set_focus()
+            send_keys("%{F4}")
 
 
 InstagifferAutomator = WindowsInstagifferAutomator if sys.platform == "win32" else MacInstagifferAutomator

@@ -9,7 +9,6 @@ build/
 # IDE — commit shared configs, ignore the rest
 .vscode/*
 !.vscode/launch.json
-!.vscode/tasks.json
 
 # Binary dependencies (downloaded via make deps_mac / deps_win)
 deps/

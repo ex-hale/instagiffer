@@ -55,16 +55,18 @@ extension-pkg-allow-list = ["win32api", "win32event", "win32gui", "win32process"
 
 [tool.pylint."messages control"]
 disable = [
-    "W0401", "W0702", "W1201", "W0212", "W0511", "W0613", "W0612", "W0201",
-    "E0401", "E1101",
+    "W0401", "W1201", "W0212", "W0511", "W0613", "W0201",
     "C0103", "C0415", "W0614", "C0116", "C0115", "C0209", "C0301", "C0413",
     "C0412", "C0302", "C0121", "C0123", "C0200", "C0325", "C1802",
     "R0205", "R0903", "R0902", "R0904", "R0912", "R0913", "R0914", "R0915", "R0916",
     "R0917",
     "R1701", "R1703", "R1704", "R1705", "R1710", "R1714", "R1716", "R1721",
     "R1730", "R1731", "R1732", "R1734", "R1735",
-    "W0602", "W0603", "W0621", "W0707", "W0718", "W0719", "W1514",
+    "W0602", "W0603", "W0707", "W1514",
 ]
+
+[tool.pylint.typecheck]
+generated-members = ["PIL.Image.LANCZOS", "PIL.Image.NEAREST"]
 
 [tool.pylint.format]
 max-line-length = 200

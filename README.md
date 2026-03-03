@@ -4,11 +4,11 @@
 
 Whether you pronounce it GIF, or GIF, Instagiffer is the perfect tool for creating the best reaction moments to any situation. Sometimes, only a GIF will do in a conversation, and can say so much by saying so little. If you find yourself struggling to find the perfect GIF, look no more. Just make your own. It's easy. Promise.
 
-Instagiffer was designed during an era where websites would limit upload file sizes to 1MB, therefore, my primary goal was to generate highly-optimized GIFs that still look great. It started out as a CLI script which I used for my personal GIF creations and it grew organically from there. The user experience was never my primary focus, so the UI is a bit quirky. Help me improve it!
+Instagiffer was designed during an era where websites would limit upload file sizes to 1MB, therefore, my primary goal was to generate highly-optimized GIFs that still looked great. It started out as a CLI script which I used for my personal GIF creations and it grew organically from there. The user experience was never my primary focus, so the UI is a bit quirky. Help me improve it!
 
 ## Architecture
 
-Instagiffer is a single-file Python application (`instagiffer.py`) with a Tkinter GUI. It orchestrates several external tools to turn videos into optimized GIFs: FFmpeg extracts frames from video files, ImageMagick handles effects, cropping, text overlays, and GIF compression, and gifsicle provides optional further optimization. Videos can be loaded from local files or downloaded from YouTube and other sites via yt-dlp. All configuration is stored in an INI file (`instagiffer.conf`) managed by Python's configparser.
+Instagiffer is a single-file Python application (`instagiffer.py`) built with a Tkinter GUI. It orchestrates several external tools to turn videos into optimized GIFs: FFmpeg extracts frames from video files, ImageMagick handles effects, cropping, text overlays, and GIF compression, and gifsicle provides optional further optimization. Videos can be loaded from local files or downloaded from YouTube and other sites via yt-dlp. All configuration is stored in an INI file (`instagiffer.conf`) managed by Python's configparser.
 
 ## Setting Up Your Development Environment
 
@@ -42,6 +42,9 @@ cd instagiffer
 make deps    # Downloads ffmpeg, yt-dlp, gifsicle, and ImageMagick into deps/win/
 make run     # Launches the app
 ```
+
+> **Tip:** If you see a PowerShell execution policy error when activating the venv, run
+> `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` once to make it permanent.
 
 ## Development
 

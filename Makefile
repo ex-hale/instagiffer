@@ -18,7 +18,7 @@ TEST_VIDEO_URLS := \
 	https://www.youtube.com/watch?v=aqz-KE-bpKQ \
 	https://www.youtube.com/watch?v=L_uXZEkhlZU
 
-.PHONY: init run test test-app test-videos lint format clean deps dist install
+.PHONY: init run test test-app test-videos lint format clean
 
 init: $(VENV_STAMP)
 
@@ -49,7 +49,7 @@ test: init format lint test-videos
 	$(PYTHON) -m pytest
 
 test-app: install test-videos
-	$(PYTHON) -m pytest --app=$(INSTALL_PATH)
+	$(PYTHON) -m pytest "--app=$(INSTALL_PATH)"
 
 clean:
 	rm -rf $(VENV) __pycache__ test/__pycache__ .pytest_cache *.egg-info instagiffer-event.log
@@ -65,7 +65,11 @@ FFMPEG_URL   := https://evermeet.cx/ffmpeg/getrelease/zip
 YTDLP_URL    := https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
 YTDLP        := deps/mac/yt-dlp
 
-deps: init
+DEPS_STAMP := build/.deps-stamp
+DIST_STAMP := build/.dist-stamp
+
+deps: $(DEPS_STAMP)
+$(DEPS_STAMP): $(VENV_STAMP)
 	@command -v brew >/dev/null || (echo "Error: Homebrew is required. See https://brew.sh" && exit 1)
 	@for pkg in python3 python-tk pkg-config cmake gperf gifsicle create-dmg; do \
 		brew list $$pkg >/dev/null 2>&1 || brew install $$pkg; \
@@ -77,14 +81,16 @@ deps: init
 	@[ -f deps/mac/ffmpeg ]   || (curl -fSL -o deps/mac/ffmpeg.zip "$(FFMPEG_URL)" && unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip && chmod +x deps/mac/ffmpeg)
 	@[ -f deps/mac/yt-dlp ]   || (curl -fSL -o deps/mac/yt-dlp "$(YTDLP_URL)" && chmod +x deps/mac/yt-dlp)
 	@[ -f deps/mac/gifsicle ] || cp "$$(which gifsicle)" deps/mac/gifsicle
+	@touch $@
 	@echo "macOS dependencies ready in deps/mac/"
 
-$(APP_PATH): init
+$(DIST_STAMP): $(VENV_STAMP) instagiffer.py main.py instagiffer.conf $(DEPS_STAMP)
 	@echo "Building Mac release with PyInstaller"
 	$(PYTHON) -m PyInstaller release/Instagiffer-mac.spec --distpath dist --workpath build/pyinstaller --noconfirm
 	codesign --force --deep --sign - $(APP_PATH)
+	@touch $@
 
-dist: $(APP_PATH)
+dist: $(DIST_STAMP)
 	@rm -f dist/Instagiffer-$(VERSION).dmg
 	create-dmg \
 		--volname "Instagiffer" \
@@ -101,7 +107,7 @@ dist: $(APP_PATH)
 		"$(APP_PATH)"
 	@SIZE=$$(stat -f%z "dist/Instagiffer-$(VERSION).dmg"); echo "Built dist/Instagiffer-$(VERSION).dmg ($$(( SIZE / 1048576 ))MB)"
 
-install: $(APP_PATH)
+install: $(DIST_STAMP)
 	@rm -rf $(INSTALL_PATH)
 	cp -R $(APP_PATH) $(INSTALL_PATH)
 	@echo "Installed to $(INSTALL_PATH)"
@@ -109,8 +115,8 @@ install: $(APP_PATH)
 else ifeq ($(OS),Windows_NT)
 
 APP_PATH     := dist/Instagiffer
-INSTALL_PATH := dist/Instagiffer/Instagiffer.exe
-ISCC         := C:/Program Files (x86)/Inno Setup 6/ISCC.exe
+INSTALL_PATH := C:/Program Files/Instagiffer/Instagiffer.exe
+ISCC         := $(or $(wildcard C:/Program Files (x86)/Inno Setup 6/ISCC.exe),$(LOCALAPPDATA)/Programs/Inno Setup 6/ISCC.exe)
 SEVENZIP     := C:/Program Files/7-Zip/7z.exe
 MAGICK_VER   := 7.1.2-15
 MAGICK_URL   := https://imagemagick.org/archive/binaries/ImageMagick-$(MAGICK_VER)-portable-Q16-x64.7z
@@ -119,7 +125,12 @@ YTDLP_URL    := https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp
 YTDLP        := deps/win/yt-dlp.exe
 GIFSICLE_URL := https://eternallybored.org/misc/gifsicle/releases/gifsicle-1.95-win64.zip
 
-deps: init
+DEPS_STAMP    := build/.deps-stamp
+DIST_STAMP    := build/.dist-stamp
+INSTALL_STAMP := build/.install-stamp
+
+deps: $(DEPS_STAMP)
+$(DEPS_STAMP): $(VENV_STAMP)
 	$(PIP) install -e ".[build-win,test-win]"
 	@mkdir -p deps/win build
 	@[ -f deps/win/magick.exe ] || ( \
@@ -137,18 +148,25 @@ deps: init
 		curl -fSL -o build/gifsicle-win.zip "$(GIFSICLE_URL)" && \
 		unzip -jo build/gifsicle-win.zip "*.exe" -d deps/win/ && \
 		rm build/gifsicle-win.zip )
+	@touch $@
 	@echo "Windows dependencies ready in deps/win/"
 
-$(APP_PATH): init
+$(DIST_STAMP): $(VENV_STAMP) instagiffer.py main.py instagiffer.conf $(DEPS_STAMP)
 	@echo "Building Windows release with PyInstaller"
 	$(PYTHON) -m PyInstaller release/Instagiffer-win.spec --distpath dist --workpath build/pyinstaller --noconfirm
+	@touch $@
 
-dist: deps $(APP_PATH)
+dist: $(DIST_STAMP)
 	@rm -f dist/instagiffer-$(VERSION)-setup.exe
-	"$(ISCC)" release/installer.iss /dMyAppVersion=$(VERSION)
-	@echo "Built dist/instagiffer-$(VERSION)-setup.exe"
+	"$(ISCC)" release/installer.iss //dMyAppVersion=$(VERSION)
+	@SIZE=$$(stat -c%s "dist/instagiffer-$(VERSION)-setup.exe"); echo "Built dist/instagiffer-$(VERSION)-setup.exe ($$(( SIZE / 1048576 ))MB)"
 
-install: $(APP_PATH)
-	@echo "To install, run: dist/instagiffer-$(VERSION)-setup.exe"
+install: $(INSTALL_STAMP)
+$(INSTALL_STAMP): $(DIST_STAMP) release/installer.iss
+	@rm -f dist/instagiffer-$(VERSION)-setup.exe
+	"$(ISCC)" release/installer.iss //dMyAppVersion=$(VERSION)
+	MSYS_NO_PATHCONV=1 dist/instagiffer-$(VERSION)-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
+	@touch $@
+	@echo "Installed to $(INSTALL_PATH)"
 
 endif
