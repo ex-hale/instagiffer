@@ -22,7 +22,7 @@ $packages = @(
     @{ Id = "Python.Python.$PythonVersion";   Name = "Python $PythonVersion"; Override = "Include_tcltk=1"},
     # needed for Git Bash, which runs make:
     @{ Id = "Git.Git";              Name = "Git for Windows" },
-    @{ Id = "GnuWin32.Make";        Name = "GNU Make"        },
+    @{ Id = "ezwinports.make";      Name = "GNU Make"        },
     # needed to extract ImageMagick portable archive:
     @{ Id = "7zip.7zip";            Name = "7-Zip"           },
     @{ Id = "JRSoftware.InnoSetup"; Name = "Inno Setup 6"    }
@@ -65,17 +65,14 @@ function Add-ToUserPath {
         if ($current -notlike "*$Name*") {
             $newPath = if ($current) { "$current;$Path" } else { $Path }
             [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
-            Write-Host "Added $Name to user PATH." -ForegroundColor Green
+            Write-Host "Added $Name to user PATH!" -ForegroundColor Green
         } else {
-            Write-Host "$Name already on PATH." -ForegroundColor Green
+            Write-Host "$Name already on PATH!" -ForegroundColor Green
         }
     } else {
         Write-Warning "$Name not found at $Path - install may have failed. Add it to PATH manually if needed."
     }
 }
-
-# Add GNU Make to the current user PATH so Git Bash can find it
-Add-ToUserPath "${env:ProgramFiles(x86)}\GnuWin32\bin" "GNU Make"
 
 # Add Inno Setup to current user PATH so make can find it
 $isccPath = "${env:ProgramFiles(x86)}\Inno Setup 6"
@@ -83,5 +80,18 @@ if (-not (Test-Path $isccPath)) {
     $isccPath = "${env:LOCALAPPDATA}\Programs\Inno Setup 6"
 }
 Add-ToUserPath $isccPath "Inno Setup"
+
+$gitSh = (Get-Command "git" -ErrorAction SilentlyContinue).Source -replace "cmd\\git.exe", "usr\bin\sh.exe"
+if ($gitSh -and (Test-Path $gitSh)) {
+    $gitShForward = $gitSh -replace "\\", "/"
+    if ($gitShForward -ne "C:/Program Files/Git/usr/bin/sh.exe") {
+        Write-Warning "Git is installed at a non-default location: $gitShForward"
+        Write-Warning "Update SHELL in `Makefile` to: $gitShForward"
+    } else {
+        Write-Host "Git sh.exe found at expected location!" -ForegroundColor Green
+    }
+} else {
+    Write-Warning "Could not detect Git sh.exe location!"
+}
 
 Write-Host "Done." -ForegroundColor Green
