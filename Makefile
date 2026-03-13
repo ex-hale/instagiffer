@@ -1,18 +1,21 @@
 VENV := .venv
 
 ifeq ($(OS),Windows_NT)
-    PYTHON     := $(VENV)/Scripts/python
-    PIP        := $(VENV)/Scripts/pip
-    PYTHON_CMD := python
-    VENV_STAMP := $(VENV)/Scripts/activate
+	SHELL		:= C:/Program Files/Git/usr/bin/sh.exe
+	export PATH	:= C:/Program Files/Git/usr/bin:$(PATH)
+	PYTHON		:= $(VENV)/Scripts/python
+	PYTHON_CMD	:= py -3.13
+	VENV_STAMP	:= $(VENV)/Scripts/activate
 else
-    PYTHON     := $(VENV)/bin/python3
-    PIP        := $(VENV)/bin/pip
-    PYTHON_CMD := python3
-    VENV_STAMP := $(VENV)/bin/activate
+	PYTHON		:= $(VENV)/bin/python3
+	PYTHON_CMD	:= python3
+	VENV_STAMP	:= $(VENV)/bin/activate
 endif
 
-VERSION := $(shell grep -m1 '__version__' instagiffer.py | awk -F'"' '{print $$2}')
+PIP			:= $(PYTHON) -m pip
+VERSION		:= $(shell grep -m1 '__version__' instagiffer.py | awk -F'"' '{print $$2}')
+DEPS_STAMP	:= build/.deps-stamp
+DIST_STAMP	:= build/.dist-stamp
 
 TEST_VIDEO_URLS := \
 	https://www.youtube.com/watch?v=aqz-KE-bpKQ \
@@ -58,15 +61,12 @@ clean:
 
 ifeq ($(shell uname -s),Darwin)
 
-APP_PATH     := dist/Instagiffer.app
-INSTALL_PATH := /Applications/Instagiffer.app
-MAGICK_OUT   := build/imagemagick/out
-FFMPEG_URL   := https://evermeet.cx/ffmpeg/getrelease/zip
-YTDLP_URL    := https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
-YTDLP        := deps/mac/yt-dlp
-
-DEPS_STAMP := build/.deps-stamp
-DIST_STAMP := build/.dist-stamp
+APP_PATH		:= dist/Instagiffer.app
+INSTALL_PATH	:= /Applications/Instagiffer.app
+MAGICK_OUT		:= build/imagemagick/out
+FFMPEG_URL		:= https://evermeet.cx/ffmpeg/getrelease/zip
+YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
+YTDLP			:= deps/mac/yt-dlp
 
 deps: $(DEPS_STAMP)
 $(DEPS_STAMP): $(VENV_STAMP)
@@ -78,7 +78,9 @@ $(DEPS_STAMP): $(VENV_STAMP)
 	$(MAKE) -f imagemagick.mk
 	@mkdir -p deps/mac
 	@cp -R $(MAGICK_OUT)/* deps/mac/
+	@echo "Downloading ffmpeg from $(FFMPEG_URL) ..."
 	@[ -f deps/mac/ffmpeg ]   || (curl -fSL -o deps/mac/ffmpeg.zip "$(FFMPEG_URL)" && unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip && chmod +x deps/mac/ffmpeg)
+	@echo "Downloading yt-dlp from $(YTDLP_URL) ..."
 	@[ -f deps/mac/yt-dlp ]   || (curl -fSL -o deps/mac/yt-dlp "$(YTDLP_URL)" && chmod +x deps/mac/yt-dlp)
 	@[ -f deps/mac/gifsicle ] || cp "$$(which gifsicle)" deps/mac/gifsicle
 	@touch $@
@@ -86,7 +88,7 @@ $(DEPS_STAMP): $(VENV_STAMP)
 
 $(DIST_STAMP): $(VENV_STAMP) instagiffer.py main.py instagiffer.conf $(DEPS_STAMP)
 	@echo "Building Mac release with PyInstaller"
-	$(PYTHON) -m PyInstaller release/Instagiffer-mac.spec --distpath dist --workpath build/pyinstaller --noconfirm
+	$(PYTHON) -m PyInstaller --log-level WARN release/Instagiffer-mac.spec --distpath dist --workpath build/pyinstaller --noconfirm
 	codesign --force --deep --sign - $(APP_PATH)
 	@touch $@
 
@@ -114,36 +116,39 @@ install: $(DIST_STAMP)
 
 else ifeq ($(OS),Windows_NT)
 
-APP_PATH     := dist/Instagiffer
-INSTALL_PATH := C:/Program Files/Instagiffer/Instagiffer.exe
-ISCC         := $(or $(wildcard C:/Program Files (x86)/Inno Setup 6/ISCC.exe),$(LOCALAPPDATA)/Programs/Inno Setup 6/ISCC.exe)
-SEVENZIP     := C:/Program Files/7-Zip/7z.exe
-MAGICK_VER   := 7.1.2-15
-MAGICK_URL   := https://imagemagick.org/archive/binaries/ImageMagick-$(MAGICK_VER)-portable-Q16-x64.7z
-FFMPEG_URL   := https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
-YTDLP_URL    := https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
-YTDLP        := deps/win/yt-dlp.exe
-GIFSICLE_URL := https://eternallybored.org/misc/gifsicle/releases/gifsicle-1.95-win64.zip
-
-DEPS_STAMP    := build/.deps-stamp
-DIST_STAMP    := build/.dist-stamp
-INSTALL_STAMP := build/.install-stamp
+APP_PATH		:= dist/Instagiffer
+INSTALL_PATH	:= C:/Program Files/Instagiffer/Instagiffer.exe
+ISCC			:= ISCC.exe
+SEVENZIP		:= C:/Program Files/7-Zip/7z.exe
+MAGICK_BINS		:= https://imagemagick.org/archive/binaries/
+MAGICK_TYPE		:= -portable-Q8-x64.7z
+MAGICK_VER		:= $(shell curl -fsSL $(MAGICK_BINS) | grep -oP 'ImageMagick-\K[\d.]+-\d+(?=$(MAGICK_TYPE))' | sort -V | tail -1)
+MAGICK_URL		:= $(MAGICK_BINS)ImageMagick-$(MAGICK_VER)$(MAGICK_TYPE)
+FFMPEG_URL		:= https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
+YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
+YTDLP			:= deps/win/yt-dlp.exe
+GIFSICLE_URL	:= https://eternallybored.org/misc/gifsicle/releases/gifsicle-1.95-win64.zip
+INSTALL_STAMP	:= build/.install-stamp
 
 deps: $(DEPS_STAMP)
 $(DEPS_STAMP): $(VENV_STAMP)
 	$(PIP) install -e ".[build-win,test-win]"
 	@mkdir -p deps/win build
+	@echo "Downloading ImageMagick from $(MAGICK_URL) ..."
 	@[ -f deps/win/magick.exe ] || ( \
 		curl -fSL -o build/magick-win.7z "$(MAGICK_URL)" && \
 		"$(SEVENZIP)" e build/magick-win.7z -odeps/win -y "magick.exe" && \
 		rm build/magick-win.7z )
+	@echo "Downloading ffmpeg from $(FFMPEG_URL) ..."
 	@[ -f deps/win/ffmpeg.exe ] || ( \
 		curl -fSL -o build/ffmpeg-win.zip "$(FFMPEG_URL)" && \
 		mkdir -p build/ffmpeg-tmp && \
 		unzip -o build/ffmpeg-win.zip -d build/ffmpeg-tmp && \
 		find build/ffmpeg-tmp -name ffmpeg.exe -exec cp {} deps/win/ \; && \
 		rm -rf build/ffmpeg-win.zip build/ffmpeg-tmp )
+	@echo "Downloading yt-dlp from $(YTDLP_URL) ..."
 	@[ -f deps/win/yt-dlp.exe ] || curl -fSL -o deps/win/yt-dlp.exe "$(YTDLP_URL)"
+	@echo "Downloading gifsicle from $(GIFSICLE_URL) ..."
 	@[ -f deps/win/gifsicle.exe ] || ( \
 		curl -fSL -o build/gifsicle-win.zip "$(GIFSICLE_URL)" && \
 		unzip -jo build/gifsicle-win.zip "*.exe" -d deps/win/ && \
@@ -152,21 +157,32 @@ $(DEPS_STAMP): $(VENV_STAMP)
 	@echo "Windows dependencies ready in deps/win/"
 
 $(DIST_STAMP): $(VENV_STAMP) instagiffer.py main.py instagiffer.conf $(DEPS_STAMP)
-	@echo "Building Windows release with PyInstaller"
-	$(PYTHON) -m PyInstaller release/Instagiffer-win.spec --distpath dist --workpath build/pyinstaller --noconfirm
+	@echo "Building Windows release with PyInstaller ..."
+	$(PYTHON) -m PyInstaller --log-level WARN release/Instagiffer-win.spec --distpath dist --workpath build/pyinstaller --noconfirm
 	@touch $@
 
 dist: $(DIST_STAMP)
 	@rm -f dist/instagiffer-$(VERSION)-setup.exe
-	"$(ISCC)" release/installer.iss //dMyAppVersion=$(VERSION)
+	@echo "Building Installer with Inno Setup ..."
+	@MSYS_NO_PATHCONV=1 "$(ISCC)" /Q release/installer.iss /dMyAppVersion=$(VERSION)
 	@SIZE=$$(stat -c%s "dist/instagiffer-$(VERSION)-setup.exe"); echo "Built dist/instagiffer-$(VERSION)-setup.exe ($$(( SIZE / 1048576 ))MB)"
 
 install: $(INSTALL_STAMP)
 $(INSTALL_STAMP): $(DIST_STAMP) release/installer.iss
 	@rm -f dist/instagiffer-$(VERSION)-setup.exe
-	"$(ISCC)" release/installer.iss //dMyAppVersion=$(VERSION)
-	MSYS_NO_PATHCONV=1 dist/instagiffer-$(VERSION)-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
+	@echo "Building Installer with Inno Setup ..."
+	@MSYS_NO_PATHCONV=1 "$(ISCC)" /Q release/installer.iss /dMyAppVersion=$(VERSION)
+	@echo "Calling Installer ..."
+	@MSYS_NO_PATHCONV=1 dist/instagiffer-$(VERSION)-setup.exe /VERYSILENT /SUPPRESSMSGBOXES
 	@touch $@
 	@echo "Installed to $(INSTALL_PATH)"
 
 endif
+
+redist:
+	@rm -f $(DIST_STAMP)
+	$(MAKE) dist
+
+redeps:
+	@rm -f $(DEPS_STAMP)
+	$(MAKE) deps
