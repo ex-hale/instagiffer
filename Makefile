@@ -21,7 +21,25 @@ TEST_VIDEO_URLS := \
 	https://www.youtube.com/watch?v=aqz-KE-bpKQ \
 	https://www.youtube.com/watch?v=L_uXZEkhlZU
 
-.PHONY: init run test test-app test-videos lint format clean
+.PHONY: init run test test-app test-videos lint format clean help
+
+help:
+	@echo "Usage: make [target]"
+	@echo ""
+	@echo "General:"
+	@echo "  init         Set up the virtual Python environment."
+	@echo "  run          Run local Instagiffer app."
+	@echo "  lint         Run the linter."
+	@echo "  format       Run the formatter."
+	@echo "  test         Run formatter, linter and tests."
+	@echo "  clean        Clean build artifacts."
+	@echo ""
+	@echo "Platform (current: $(PLATFORM)):"
+	@echo "  deps         Download platform dependencies."
+	@echo "  dist         Build a distributable package."
+	@echo "  install      Install the application."
+	@echo "  redeps       Re-download dependencies."
+	@echo "  redist       Force full rebuild."
 
 init: $(VENV_STAMP)
 
