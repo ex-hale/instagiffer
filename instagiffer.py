@@ -264,11 +264,11 @@ def DefaultOutputHandler(stdoutLines, stderrLines, cmd):
     i = False
 
     for outData in [stdoutLines, stderrLines, cmd]:
-        if outData is None or len(outData) == 0:
+        if not outData:
             continue
 
-        if ImAMac() and type(outData) == list:
-            outData = " ".join('"{0}"'.format(arg) for arg in outData)
+        if not ImAPC() and isinstance(outData, list):
+            outData= ' '.join(f'"{arg}"' for arg in outData)
 
         # yt-dlp
         youtubeDlSearch = re.search(r"\[download\]\s+([0-9\.]+)% of", outData, re.MULTILINE)
@@ -321,7 +321,7 @@ def RunProcess(
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
-    elif ImAMac():
+    else:
         startupinfo = None
         cmd = shlex.split(cmd)
 
