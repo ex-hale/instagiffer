@@ -1,12 +1,14 @@
 VENV := .venv
 
 ifeq ($(OS),Windows_NT)
+	PLATFORM := windows
 	SHELL		:= C:/Program Files/Git/usr/bin/sh.exe
 	export PATH	:= C:/Program Files/Git/usr/bin:$(PATH)
 	PYTHON		:= $(VENV)/Scripts/python
 	PYTHON_CMD	:= py -3.13
 	VENV_STAMP	:= $(VENV)/Scripts/activate
 else
+	PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')
 	PYTHON		:= $(VENV)/bin/python3
 	PYTHON_CMD	:= python3
 	VENV_STAMP	:= $(VENV)/bin/activate
@@ -77,7 +79,16 @@ clean:
 	rm -rf dist/ build/ deps/ *.pyc
 	rm -rf test/test_data/
 
-ifeq ($(shell uname -s),Darwin)
+redeps:
+	@rm -f $(DEPS_STAMP)
+	$(MAKE) deps
+
+redist:
+	@rm -f $(DIST_STAMP)
+	$(MAKE) dist
+
+
+ifeq ($(PLATFORM),darwin)
 
 APP_PATH		:= dist/Instagiffer.app
 INSTALL_PATH	:= /Applications/Instagiffer.app
@@ -132,7 +143,7 @@ install: $(DIST_STAMP)
 	cp -R $(APP_PATH) $(INSTALL_PATH)
 	@echo "Installed to $(INSTALL_PATH)"
 
-else ifeq ($(OS),Windows_NT)
+else ifeq ($(PLATFORM),windows)
 
 APP_PATH		:= dist/Instagiffer
 INSTALL_PATH	:= C:/Program Files/Instagiffer/Instagiffer.exe
@@ -195,12 +206,38 @@ $(INSTALL_STAMP): $(DIST_STAMP) release/installer.iss
 	@touch $@
 	@echo "Installed to $(INSTALL_PATH)"
 
+
+else ifeq ($(PLATFORM),linux)
+
+DEPS_DIR		:= deps/linux
+# APP_PATH		:= dist/Instagiffer.app
+# INSTALL_PATH	:= /Applications/Instagiffer.app
+MAGICK_URL		:= https://imagemagick.org/archive/binaries/magick
+FFMPEG_URL		:= https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+FFMPEG_TMP		:= $(DEPS_DIR)/ffmpeg.tar.xz
+YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
+
+deps: $(DEPS_STAMP)
+$(DEPS_STAMP): $(VENV_STAMP)
+	$(PIP) install -e ".[build-linux]"
+	@mkdir -p $(DEPS_DIR) build
+	@[ -f $(DEPS_DIR)/magick ] || ( \
+		echo "Downloading ImageMagick from $(MAGICK_URL) ..." && \
+		curl -fSL -o $(DEPS_DIR)/magick "$(MAGICK_URL)" && \
+		chmod +x $(DEPS_DIR)/magick )
+	@[ -f $(DEPS_DIR)/ffmpeg ] || ( \
+		echo "Downloading ffmpeg from $(FFMPEG_URL) ..." && \
+		curl -fSL -o $(FFMPEG_TMP) "$(FFMPEG_URL)" && \
+		tar -xf $(FFMPEG_TMP) -C $(DEPS_DIR)/ --strip-components=2 --wildcards "*/bin/ffmpeg" && \
+		rm $(FFMPEG_TMP) && \
+		chmod +x $(DEPS_DIR)/ffmpeg )
+	@[ -f $(DEPS_DIR)/yt-dlp ] || ( \
+		echo "Downloading yt-dlp from $(YTDLP_URL) ..." && \
+		curl -fSL -o $(DEPS_DIR)/yt-dlp "$(YTDLP_URL)" && \
+		chmod +x $(DEPS_DIR)/yt-dlp )
+# 	lets ignore gifsicle for now
+# 	@[ -f deps/mac/gifsicle ] || cp "$$(which gifsicle)" deps/mac/gifsicle
+	@touch $@
+	@echo "Linux dependencies ready in $(DEPS_DIR)"
+
 endif
-
-redist:
-	@rm -f $(DIST_STAMP)
-	$(MAKE) dist
-
-redeps:
-	@rm -f $(DEPS_STAMP)
-	$(MAKE) deps
