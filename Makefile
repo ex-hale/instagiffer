@@ -51,7 +51,10 @@ $(VENV_STAMP): pyproject.toml
 	@echo "Done. Activate with: source $(VENV_STAMP)"
 
 run: init
-	$(PYTHON) main.py
+	$(PYTHON) main.py $(ARGS)
+
+debug: init
+	$(PYTHON) main.py --debug
 
 lint: init
 	$(PYTHON) -m pylint instagiffer.py main.py test/test_instagiffer.py test/instagiffer_automation.py test/conftest.py
@@ -210,7 +213,7 @@ $(INSTALL_STAMP): $(DIST_STAMP) release/installer.iss
 else ifeq ($(PLATFORM),linux)
 
 DEPS_DIR		:= deps/linux
-# APP_PATH		:= dist/Instagiffer.app
+APP_PATH		:= dist/Instagiffer/
 # INSTALL_PATH	:= /Applications/Instagiffer.app
 MAGICK_URL		:= https://imagemagick.org/archive/binaries/magick
 FFMPEG_URL		:= https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
@@ -236,8 +239,28 @@ $(DEPS_STAMP): $(VENV_STAMP)
 		curl -fSL -o $(DEPS_DIR)/yt-dlp "$(YTDLP_URL)" && \
 		chmod +x $(DEPS_DIR)/yt-dlp )
 # 	lets ignore gifsicle for now
-# 	@[ -f deps/mac/gifsicle ] || cp "$$(which gifsicle)" deps/mac/gifsicle
+# 	@[ -f $(DEPS_DIR)/gifsicle ] || cp "$$(which gifsicle)" $(DEPS_DIR)/gifsicle
 	@touch $@
 	@echo "Linux dependencies ready in $(DEPS_DIR)"
+
+$(DIST_STAMP): $(VENV_STAMP) instagiffer.py main.py instagiffer.conf $(DEPS_STAMP)
+	@echo "Building Linux release with PyInstaller"
+	$(PYTHON) -m PyInstaller --log-level WARN release/Instagiffer-linux.spec --distpath dist --workpath build/pyinstaller --noconfirm
+# 	codesign --force --deep --sign - $(APP_PATH)
+	@touch $@
+
+dist: $(DIST_STAMP)
+
+# 	dpkg-deb --build build/deb-pkg dist/instagiffer_${VERSION}_amd64.deb
+
+
+# 	@rm -f dist/Instagiffer-$(VERSION).dmg
+# 	@SIZE=$$(stat -f%z "dist/Instagiffer-$(VERSION).dmg"); echo "Built dist/Instagiffer-$(VERSION).dmg ($$(( SIZE / 1048576 ))MB)"
+
+install: $(DIST_STAMP)
+	@rm -rf $(INSTALL_PATH)
+	cp -R $(APP_PATH) $(INSTALL_PATH)
+	@echo "Installed to $(INSTALL_PATH)"
+
 
 endif
