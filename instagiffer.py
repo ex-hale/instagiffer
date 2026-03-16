@@ -131,7 +131,7 @@ def GetDisplayScaleFactor():
 
 def OpenFileWithDefaultApp(fileName):
     """Open a file in the application associated with this file extension"""
-    if sys.platform == "darwin":
+    if not ImAPC():
         subprocess.Popen(["open", fileName])
     else:
         try:
@@ -2715,9 +2715,12 @@ class GifApp:
 
         if ImAPC():
             self.parent.wm_iconbitmap("instagiffer.ico")
-        elif ImAMac():
+        else:
             try:
-                icon = PIL.ImageTk.PhotoImage(PIL.Image.open("instagiffer.icns"))
+                if ImAMac():
+                    icon = PIL.ImageTk.PhotoImage(PIL.Image.open("instagiffer.icns"))
+                else:
+                    icon = PIL.ImageTk.PhotoImage(PIL.Image.open("assets/logo.png"))
                 self.parent.wm_iconphoto(True, icon)
                 self._app_icon = icon  # prevent GC
             except (OSError, TclError):
@@ -3195,6 +3198,9 @@ class GifApp:
 
         if ImAPC():
             self.spnDuration.bind("<MouseWheel>", self.OnDurationMouseWheel)
+        elif not ImAMac():
+            self.spnDuration.bind("<Button-4>", lambda e: self.OnDurationMouseWheel(e))
+            self.spnDuration.bind("<Button-5>", lambda e: self.OnDurationMouseWheel(e))
 
         valueFontColor = "#353535"
 
@@ -3515,7 +3521,7 @@ class GifApp:
 
     def BindKeybindings(self):
         """Read [keybindings] from config and bind them. Mod+ maps to Command on macOS, Control on Windows."""
-        mod = "Command" if sys.platform == "darwin" else "Control"
+        mod = "Command" if ImAMac() else "Control"
         actions = {
             "creategif": lambda e: self.OnCreateGif(),
             "loadvideo": lambda e: self.OnLoadVideo(),
