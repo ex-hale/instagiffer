@@ -146,6 +146,7 @@ install: $(DIST_STAMP)
 	cp -R $(APP_PATH) $(INSTALL_PATH)
 	@echo "Installed to $(INSTALL_PATH)"
 
+
 else ifeq ($(PLATFORM),windows)
 
 APP_PATH		:= dist/Instagiffer
@@ -214,7 +215,6 @@ else ifeq ($(PLATFORM),linux)
 
 DEPS_DIR		:= deps/linux
 APP_PATH		:= dist/Instagiffer/
-# INSTALL_PATH	:= /Applications/Instagiffer.app
 MAGICK_URL		:= https://imagemagick.org/archive/binaries/magick
 FFMPEG_URL		:= https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
 FFMPEG_TMP		:= $(DEPS_DIR)/ffmpeg.tar.xz
@@ -300,11 +300,9 @@ dist: $(DIST_STAMP)
 	@dpkg-deb -v -D --build $(DEB_ROOT) $(DEB_OUT)
 	@echo "Done: $(DEB_OUT)"
 
-
 install: $(DIST_STAMP)
 	@rm -rf $(INSTALL_PATH)
 	cp -R $(APP_PATH) $(INSTALL_PATH)
 	@echo "Installed to $(INSTALL_PATH)"
-
 
 endif
