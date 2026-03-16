@@ -220,8 +220,10 @@ FFMPEG_URL		:= https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ff
 FFMPEG_TMP		:= $(DEPS_DIR)/ffmpeg.tar.xz
 YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
 
+INSTALL_PATH	:= /opt/instagiffer
 DEB_ROOT		:= dist/deb_pkg
 DEB_OUT			:= dist/instagiffer_$(VERSION)_amd64.deb
+DEB_COMPRESS	?= gzip # override with: make dist DEB_COMPRESS=xz
 
 deps: $(DEPS_STAMP)
 $(DEPS_STAMP): $(VENV_STAMP)
@@ -255,19 +257,19 @@ dist: $(DIST_STAMP)
 	@echo "  Building package tree ..."
 	@rm -rf $(DEB_ROOT)
 	@mkdir -p $(DEB_ROOT)/DEBIAN
-	@mkdir -p $(DEB_ROOT)/opt/instagiffer
+	@mkdir -p $(DEB_ROOT)$(INSTALL_PATH)
 	@mkdir -p $(DEB_ROOT)/usr/share/applications
 	@mkdir -p $(DEB_ROOT)/usr/share/icons/hicolor/256x256/apps
 	@mkdir -p dist
 
 	@echo "  Copying app files ..."
-	@cp -r $(APP_PATH)/. $(DEB_ROOT)/opt/instagiffer/
+	@cp -r $(APP_PATH)/. $(DEB_ROOT)$(INSTALL_PATH)/
 	@echo "  Writing control file ..."
 	@printf '%s\n' \
 		'Package: instagiffer' \
 		'Version: $(VERSION)' \
 		'Architecture: amd64' \
-		'Installed-Size: '"$$(du -sk $(DEB_ROOT)/opt/instagiffer | cut -f1)" \
+		'Installed-Size: '"$$(du -sk $(DEB_ROOT)$(INSTALL_PATH) | cut -f1)" \
 		'Maintainer: Justin Todd <instagiffer@gmail.com>' \
 		'Depends: ffmpeg, imagemagick' \
 		'Description: The easy way to make GIFs from videos' \
@@ -277,7 +279,7 @@ dist: $(DIST_STAMP)
 	@echo "  Writing postinst ..."
 	@printf '%s\n' \
 		'#!/bin/bash' \
-		'ln -sf /opt/instagiffer/Instagiffer /usr/local/bin/instagiffer' \
+		'ln -sf $(INSTALL_PATH)/Instagiffer /usr/local/bin/instagiffer' \
 		'update-desktop-database /usr/share/applications/ 2>/dev/null || true' \
 		'gtk-update-icon-cache /usr/share/icons/hicolor/ 2>/dev/null || true' \
 		> $(DEB_ROOT)/DEBIAN/postinst
@@ -288,7 +290,7 @@ dist: $(DIST_STAMP)
 		'[Desktop Entry]' \
 		'Name=Instagiffer' \
 		'Comment=The easy way to make GIFs from videos' \
-		'Exec=/opt/instagiffer/Instagiffer' \
+		'Exec=$(INSTALL_PATH)/Instagiffer' \
 		'Icon=instagiffer' \
 		'Type=Application' \
 		'Categories=Graphics;Video;' \
@@ -296,13 +298,12 @@ dist: $(DIST_STAMP)
 		> $(DEB_ROOT)/usr/share/applications/instagiffer.desktop
 	@cp assets/logo.png $(DEB_ROOT)/usr/share/icons/hicolor/256x256/apps/instagiffer.png
 
-	@echo "  Building .deb ..."
-	@dpkg-deb -v -D --build $(DEB_ROOT) $(DEB_OUT)
+	@echo "  Building .deb (compressing with $(DEB_COMPRESS))..."
+	@dpkg-deb -Z$(DEB_COMPRESS) --build $(DEB_ROOT) $(DEB_OUT)
 	@echo "Done: $(DEB_OUT)"
 
-install: $(DIST_STAMP)
-	@rm -rf $(INSTALL_PATH)
-	cp -R $(APP_PATH) $(INSTALL_PATH)
+install: $(DEB_OUT)
+	sudo dpkg -i $(DEB_OUT)
 	@echo "Installed to $(INSTALL_PATH)"
 
 endif
