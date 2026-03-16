@@ -16,6 +16,7 @@ echo "  ✔️ make"
 MISSING_PY_PACKS=""
 python3 -c "import tkinter" 2>/dev/null || MISSING_PY_PACKS="$MISSING_PY_PACKS python3-tk"
 python3 -c "import venv" 2>/dev/null    || MISSING_PY_PACKS="$MISSING_PY_PACKS python3-venv"
+python3 -c "import ensurepip" 2>/dev/null || MISSING_PY_PACKS="$MISSING_PY_PACKS python3-venv"
 
 if [ -n "$MISSING_PY_PACKS" ]; then
     echo "  Installing missing Python packages:$MISSING_PY_PACKS ..."
