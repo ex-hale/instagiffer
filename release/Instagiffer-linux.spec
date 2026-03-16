@@ -26,6 +26,7 @@ datas = [
     (p("deps/linux/ffmpeg"), "deps/linux"),
     (p("deps/linux/magick"), "deps/linux"),
     (p("deps/linux/yt-dlp"), "deps/linux"),
+    (p("assets/logo.png"), "assets"),
     # (p("deps/linux/gifsicle"), "deps/linux"),
     # (p("deps/linux/etc"), "deps/linux/etc"),
 ]
