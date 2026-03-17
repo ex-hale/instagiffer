@@ -46,18 +46,34 @@ make run     # Launches the app
 > **Tip:** If you see a PowerShell execution policy error when activating the venv, run
 > `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` once to make it permanent.
 
+
+### Linux
+
+Prerequisites (one-time setup on a fresh machine). In any Terminal prompt:
+
+```bash
+git clone https://github.com/ex-hale/instagiffer.git
+cd instagiffer
+sudo ./install-devtools.sh
+make deps    # Downloads ffmpeg, yt-dlp, and ImageMagick into deps/linux/
+make run     # Launches the app
+```
+
+
 ## Development
 
 The Makefile provides all common development tasks:
 
 ```bash
+make help       # List all available tasks.
 make init       # Create venv and install dependencies
 make run        # Run the application
+make debug      # Run the application in Debug mode.
 make test       # Run pytest suite (downloads test videos on first run)
 make lint       # Run pylint
 make format     # Run black formatter (line length: 200)
 make clean      # Remove build artifacts, venv, test data
-make dist       # Build distributable (DMG on macOS, installer on Windows)
+make dist       # Build distributable (DMG on macOS, installer on Windows, deb on Linux)
 ```
 
 Configuration is in `pyproject.toml`. Black is configured with a 200-character line length.
@@ -70,7 +86,7 @@ Before releasing, double-check:
 - Tested on a vanilla Mac/Windows VM?
 
 ```bash
-make dist    # Build distributable (DMG on macOS, installer on Windows)
+make dist    # Build distributable (DMG on macOS, installer on Windows, deb on Linux)
 ```
 
 Output goes to `dist/`. All dependencies are fetched automatically.

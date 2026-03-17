@@ -31,6 +31,7 @@ dependencies = [
 dev = ["setuptools", "pytest", "pylint", "black"]
 build-mac = ["pyinstaller"]
 build-win = ["pyinstaller", "pywin32"]
+build-linux = ["pyinstaller"]
 test-win = ["pywinauto", "pyperclip"]
 
 [project.urls]
