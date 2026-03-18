@@ -99,6 +99,15 @@ def ImAPC():
     return sys.platform == "win32"
 
 
+def ImAWSL():
+    try:
+        with open("/proc/version") as file_object:
+            version = file_object.read().lower()
+            return "microsoft" in version and "wsl" in version
+    except OSError:
+        return False
+
+
 def GetDisplayScaleFactor():
     """Return the physical-to-logical pixel ratio on Windows (e.g. 1.25 for 125% scaling).
 
@@ -129,18 +138,32 @@ def GetDisplayScaleFactor():
     return scale if scale > 1.0 else 1.0
 
 
-def OpenFileWithDefaultApp(fileName):
+def OpenFileWithDefaultApp(fileName: str) -> None:
     """Open a file in the application associated with this file extension"""
-    if not ImAPC():
-        subprocess.Popen(["open", fileName])
-    else:
-        try:
-            os.startfile(fileName)
-        except OSError:
-            tkMessageBox.showinfo(
-                "Unable to open!",
-                "I wasn't allowed to open '" + fileName + "'. You will need to perform this task manually.",
-            )
+    try:
+        if ImAWSL():
+            subprocess.Popen(f'powershell.exe -c "Start-Process \'{fileName}\'"', shell=True)
+
+        elif fileName.startswith('http'):
+            import webbrowser
+
+            webbrowser.open(fileName)
+        else:
+            if ImAMac():
+                subprocess.Popen(["open", fileName])
+            elif ImAPC():
+                os.startfile(fileName)
+            else:
+                subprocess.Popen(["xdg-open", fileName])
+
+    except OSError:
+        report = traceback.format_exc().strip()
+        print(report)
+        tkMessageBox.showinfo(
+            "Unable to open!",
+            f"I wasn't allowed to open '{fileName}'. You will need to perform this task manually!\n"
+            f"{report}"
+        )
 
 
 def GetFileExtension(filename):
@@ -2867,7 +2890,7 @@ class GifApp:
         self.helpMenu.add_command(label="Check For Updates", underline=0, command=self.CheckForUpdates)
         self.helpMenu.add_command(label="Frequently Asked Questions", underline=0, command=self.OpenFAQ)
         self.helpMenu.add_separator()
-        self.helpMenu.add_command(label="Generate Bug Report", underline=0, command=self.ViewLog)
+        self.helpMenu.add_command(label="Generate Bug Report", underline=0, command=self.GenerateBugReport)
 
         # Top-level
         self.menubar.add_cascade(label="File", underline=0, menu=self.fileMenu)
@@ -4329,22 +4352,24 @@ class GifApp:
             "You are running Instagiffer " + __version__ + "!\nhttps://github.com/ex-hale/instagiffer",
         )
 
-    def ViewLog(self):
-        logPath = GetLogPath()
-
+    def GenerateBugReport(self):
+        import urllib.parse
         try:
-            numLines = sum(1 for line in open(logPath))
-        except FileNotFoundError:
-            numLines = 0
+            with open(GetLogPath()) as file_object:
+                # only last 3000 chars to stay under URL limits
+                log_content = file_object.read()[-3000:]
+        except OSError:
+            log_content = "(could not read log)"
 
-        if numLines <= 7:
-            tkMessageBox.showinfo(
-                "Bug Report",
-                "It looks like the bug report is currently empty. Please try to reproduce the bug first, and then generate the report.",
-            )
-            return
+        title = "Bug report"
+        body = f"**Describe the bug**\n\n\n**Log**\n```\n{log_content}\n```"
 
-        OpenFileWithDefaultApp(logPath)
+        url = "https://github.com/ex-hale/instagiffer/issues/new?" + urllib.parse.urlencode({
+            "title": title,
+            "body": body,
+        })
+        print(f'{url = }')
+        OpenFileWithDefaultApp(url)
 
     def OpenFAQ(self):
         OpenFileWithDefaultApp(__faqUrl__)
