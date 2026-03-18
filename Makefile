@@ -275,7 +275,6 @@ dist: $(DIST_STAMP)
 		'Architecture: amd64' \
 		'Installed-Size: '"$$(du -sk $(DEB_ROOT)$(INSTALL_PATH) | cut -f1)" \
 		'Maintainer: Justin Todd <instagiffer@gmail.com>' \
-		'Depends: ffmpeg, imagemagick' \
 		'Description: The easy way to make GIFs from videos' \
 		'Homepage: https://github.com/ex-hale/instagiffer' \
 		> $(DEB_ROOT)/DEBIAN/control
