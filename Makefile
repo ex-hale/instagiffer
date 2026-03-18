@@ -23,7 +23,7 @@ TEST_VIDEO_URLS := \
 	https://www.youtube.com/watch?v=aqz-KE-bpKQ \
 	https://www.youtube.com/watch?v=L_uXZEkhlZU
 
-.PHONY: init run test test-app test-videos lint format clean help
+.PHONY: init run test test-app test-videos lint format clean help deploy
 
 help:
 	@echo "Usage: make [target]"
@@ -42,6 +42,9 @@ help:
 	@echo "  install      Install the application."
 	@echo "  redeps       Re-download dependencies."
 	@echo "  redist       Force full rebuild."
+	@echo ""
+	@echo "Release:"
+	@echo "  deploy       Format, lint, build, and upload to GitHub draft release."
 
 init: $(VENV_STAMP)
 
@@ -95,6 +98,7 @@ ifeq ($(PLATFORM),darwin)
 
 APP_PATH		:= dist/Instagiffer.app
 INSTALL_PATH	:= /Applications/Instagiffer.app
+DIST_ARTIFACT	:= dist/Instagiffer-$(VERSION).dmg
 MAGICK_OUT		:= build/imagemagick/out
 FFMPEG_URL		:= https://evermeet.cx/ffmpeg/getrelease/zip
 YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
@@ -103,9 +107,7 @@ YTDLP			:= deps/mac/yt-dlp
 deps: $(DEPS_STAMP)
 $(DEPS_STAMP): $(VENV_STAMP)
 	@command -v brew >/dev/null || (echo "Error: Homebrew is required. See https://brew.sh" && exit 1)
-	@for pkg in python3 python-tk pkg-config cmake gperf gifsicle create-dmg; do \
-		brew list $$pkg >/dev/null 2>&1 || brew install $$pkg; \
-	done
+	brew bundle --no-lock
 	$(PIP) install -e ".[build-mac]"
 	$(MAKE) -f imagemagick.mk
 	@mkdir -p deps/mac
@@ -151,6 +153,7 @@ else ifeq ($(PLATFORM),windows)
 
 APP_PATH		:= dist/Instagiffer
 INSTALL_PATH	:= C:/Program Files/Instagiffer/Instagiffer.exe
+DIST_ARTIFACT	:= dist/instagiffer-$(VERSION)-setup.exe
 ISCC			:= ISCC.exe
 SEVENZIP		:= C:/Program Files/7-Zip/7z.exe
 MAGICK_BINS		:= https://imagemagick.org/archive/binaries/
@@ -221,8 +224,9 @@ FFMPEG_TMP		:= $(DEPS_DIR)/ffmpeg.tar.xz
 YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
 
 INSTALL_PATH	:= /opt/instagiffer
+DIST_ARTIFACT	:= dist/instagiffer_$(VERSION)_amd64.deb
 DEB_ROOT		:= dist/deb_pkg
-DEB_OUT			:= dist/instagiffer_$(VERSION)_amd64.deb
+DEB_OUT			:= $(DIST_ARTIFACT)
 DEB_COMPRESS	?= gzip # override with: make dist DEB_COMPRESS=xz
 
 deps: $(DEPS_STAMP)
@@ -307,3 +311,20 @@ install: $(DEB_OUT)
 	@echo "Installed to $(INSTALL_PATH)"
 
 endif
+
+
+RELEASE_TAG		:= $(VERSION)
+RELEASE_TITLE	:= Instagiffer $(VERSION)
+
+deploy: format lint dist
+	@echo "==> Uploading $(DIST_ARTIFACT) to GitHub draft release $(RELEASE_TAG) ..."
+	@if ! gh release view $(RELEASE_TAG) >/dev/null 2>&1; then \
+		echo "    Creating draft release $(RELEASE_TAG) ..."; \
+		gh release create $(RELEASE_TAG) --draft --title "$(RELEASE_TITLE)" --generate-notes; \
+	elif [ "$$(gh release view $(RELEASE_TAG) --json isDraft -q .isDraft)" = "false" ]; then \
+		echo "Error: Release $(RELEASE_TAG) is already published. Bump the version to create a new release." >&2; \
+		exit 1; \
+	fi
+	gh release upload $(RELEASE_TAG) $(DIST_ARTIFACT) --clobber
+	@echo "==> Done. $(DIST_ARTIFACT) uploaded to draft release $(RELEASE_TAG)."
+	@echo "    View at: $$(gh release view $(RELEASE_TAG) --json url -q .url)"

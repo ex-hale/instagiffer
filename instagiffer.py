@@ -33,7 +33,7 @@
 
 """instagiffer.py: The easy way to make GIFs"""
 
-__version__ = "1.78.0"
+__version__ = "1.79.0"
 __author__ = "Justin Todd"
 __copyright__ = "Copyright 2013-2026, Exhale Software Inc."
 __maintainer__ = "Justin Todd"
@@ -268,7 +268,7 @@ def DefaultOutputHandler(stdoutLines, stderrLines, cmd):
             continue
 
         if not ImAPC() and isinstance(outData, list):
-            outData= ' '.join(f'"{arg}"' for arg in outData)
+            outData = " ".join(f'"{arg}"' for arg in outData)
 
         # yt-dlp
         youtubeDlSearch = re.search(r"\[download\]\s+([0-9\.]+)% of", outData, re.MULTILINE)
