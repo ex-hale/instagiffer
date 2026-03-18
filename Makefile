@@ -224,8 +224,16 @@ FFMPEG_TMP		:= $(DEPS_DIR)/ffmpeg.tar.xz
 YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
 
 INSTALL_PATH	:= /opt/instagiffer
-DIST_ARTIFACT	:= dist/instagiffer_$(VERSION)_amd64.deb
-DEB_ROOT		:= dist/deb_pkg
+# If we're running from a Windows-mounted path (WSL), build the .deb in /tmp
+# to avoid NTFS permission issues with dpkg-deb.
+IN_MNT := $(filter /mnt/%,$(CURDIR))
+ifdef IN_MNT
+	DIST_ARTIFACT	:= dist/instagiffer_$(VERSION)_amd64.deb
+	DEB_ROOT		:= dist/deb_pkg
+else
+	DIST_ARTIFACT	:= /tmp/instagiffer_$(VERSION)_amd64.deb
+  DEB_ROOT		:= /tmp/deb_pkg
+endif
 DEB_OUT			:= $(DIST_ARTIFACT)
 DEB_COMPRESS	?= gzip # override with: make dist DEB_COMPRESS=xz
 
@@ -303,6 +311,7 @@ dist: $(DIST_STAMP)
 
 	@echo "  Building .deb (compressing with $(DEB_COMPRESS))..."
 	@dpkg-deb -Z$(DEB_COMPRESS) --build $(DEB_ROOT) $(DEB_OUT)
+	@if [ -n "$(IN_MNT)" ]; then mkdir -p dist && cp $(DEB_OUT) dist/ && echo "  Copied to dist/"; fi
 	@echo "Done: $(DEB_OUT)"
 
 install: $(DEB_OUT)
