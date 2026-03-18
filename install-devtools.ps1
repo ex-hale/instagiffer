@@ -25,7 +25,9 @@ $packages = @(
     @{ Id = "ezwinports.make";      Name = "GNU Make"        },
     # needed to extract ImageMagick portable archive:
     @{ Id = "7zip.7zip";            Name = "7-Zip"           },
-    @{ Id = "JRSoftware.InnoSetup"; Name = "Inno Setup 6"    }
+    @{ Id = "JRSoftware.InnoSetup"; Name = "Inno Setup 6"    },
+    # needed for `make deploy` to create GitHub releases:
+    @{ Id = "GitHub.cli";           Name = "GitHub CLI"      }
 )
 
 $alreadyInstalled = -1978335189
