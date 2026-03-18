@@ -221,8 +221,16 @@ FFMPEG_TMP		:= $(DEPS_DIR)/ffmpeg.tar.xz
 YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
 
 INSTALL_PATH	:= /opt/instagiffer
-DEB_ROOT		:= dist/deb_pkg
-DEB_OUT			:= dist/instagiffer_$(VERSION)_amd64.deb
+# If we're running from a Windows-mounted path (WSL), build the .deb in /tmp
+# to avoid NTFS permission issues with dpkg-deb.
+IN_MNT := $(filter /mnt/%,$(CURDIR))
+ifdef IN_MNT
+    DEB_ROOT := /tmp/instagiffer_deb_pkg
+    DEB_OUT  := /tmp/instagiffer_$(VERSION)_amd64.deb
+else
+    DEB_ROOT := dist/deb_pkg
+    DEB_OUT  := dist/instagiffer_$(VERSION)_amd64.deb
+endif
 DEB_COMPRESS	?= gzip # override with: make dist DEB_COMPRESS=xz
 
 deps: $(DEPS_STAMP)
@@ -271,7 +279,6 @@ dist: $(DIST_STAMP)
 		'Architecture: amd64' \
 		'Installed-Size: '"$$(du -sk $(DEB_ROOT)$(INSTALL_PATH) | cut -f1)" \
 		'Maintainer: Justin Todd <instagiffer@gmail.com>' \
-		'Depends: ffmpeg, imagemagick' \
 		'Description: The easy way to make GIFs from videos' \
 		'Homepage: https://github.com/ex-hale/instagiffer' \
 		> $(DEB_ROOT)/DEBIAN/control
@@ -300,6 +307,7 @@ dist: $(DIST_STAMP)
 
 	@echo "  Building .deb (compressing with $(DEB_COMPRESS))..."
 	@dpkg-deb -Z$(DEB_COMPRESS) --build $(DEB_ROOT) $(DEB_OUT)
+	@if [ -n "$(IN_MNT)" ]; then mkdir -p dist && cp $(DEB_OUT) dist/ && echo "  Copied to dist/"; fi
 	@echo "Done: $(DEB_OUT)"
 
 install: $(DEB_OUT)
