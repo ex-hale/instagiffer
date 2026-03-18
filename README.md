@@ -91,6 +91,13 @@ make dist    # Build distributable (DMG on macOS, installer on Windows, deb on L
 
 Output goes to `dist/`. All dependencies are fetched automatically.
 
+### Deploying to GitHub
+
+```bash
+gh auth login   # One-time setup: authenticate with GitHub
+make deploy     # Build installer and upload as a GitHub draft release
+```
+
 > **Note:** The macOS app is not notarized, so users will need to right-click and select
 > "Open" on first launch to bypass the Gatekeeper warning.
 

@@ -412,6 +412,13 @@ class MacInstagifferAutomator(_AutomatorBase):
         script += "end tell\n" * (len(menu_path) * 2 - 1)
         self._tell(script)
 
+    def generate_bug_report(self):
+        super().generate_bug_report()
+        # Close the log file that was opened in the default app (Console on macOS)
+        time.sleep(1)
+        applescript('tell application "Console" to quit')
+        self.activate()
+
 
 # Map Mac key codes → pywinauto send_keys sequences
 _WIN_KEYCODES = {
