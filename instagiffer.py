@@ -144,7 +144,7 @@ def OpenFileWithDefaultApp(fileName: str) -> None:
         if ImAWSL():
             subprocess.Popen(f'powershell.exe -c "Start-Process \'{fileName}\'"', shell=True)
 
-        elif fileName.startswith('http'):
+        elif IsUrl(fileName):
             import webbrowser
 
             webbrowser.open(fileName)
