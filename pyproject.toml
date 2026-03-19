@@ -15,40 +15,38 @@ authors = [
 ]
 keywords = ["gif", "video", "animation", "ffmpeg", "imagemagick"]
 classifiers = [
-    "Development Status :: 5 - Production/Stable",
+    "Development Status :: 3 - Alpha",
     "Environment :: MacOS X",
     "Environment :: Win32 (MS Windows)",
+    "Environment :: X11 Applications",
     "Intended Audience :: End Users/Desktop",
     "Operating System :: MacOS",
     "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
     "Topic :: Multimedia :: Video :: Conversion",
 ]
 dependencies = [
     "pyside6>=6.8",
     "pillow>=10.0",
-    "pytest>=7.0",
-    "ruff>=0.15.6",
-    "ty>=0.0.23",
 ]
 
-[project.optional-dependencies]
-dev = ["setuptools", "pytest", "pylint", "black"]
-build-mac = ["pyinstaller"]
-build-win = ["pyinstaller", "pywin32"]
-test-win = ["pywinauto", "pyperclip"]
+[dependency-groups]
+dev = [
+    "pytest",
+    "ruff",
+    "ty",
+    "poethepoet",
+]
 
 [project.urls]
 Homepage = "https://instagiffer.com"
-Repository = "https://github.com/ewerybody/instagiffer"
-"Bug Tracker" = "https://github.com/ewerybody/instagiffer/issues"
+Repository = "https://github.com/ex-hale/instagiffer"
+"Bug Tracker" = "https://github.com/ex-hale/instagiffer/issues"
 Changelog = "https://github.com/ex-hale/instagiffer/releases"
 
 [project.scripts]
 instagiffer = "instagiffer:main"
-
-[tool.setuptools]
-py-modules = ["instagiffer"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -60,6 +58,7 @@ addopts = "-v --tb=short"
 [tool.ruff]
 line-length = 200
 target-version = "py314"
+[tool.ruff.lint]
 select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
@@ -70,9 +69,8 @@ select = [
     "UP", # pyupgrade
 ]
 ignore = [
-    "E501", # line too long (handled by black)
     "B008", # do not perform function calls in argument defaults
 ]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-first-party = ["instagiffer"]
