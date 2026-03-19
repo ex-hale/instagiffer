@@ -158,11 +158,10 @@ def OpenFileWithDefaultApp(fileName: str) -> None:
 
     except OSError:
         report = traceback.format_exc().strip()
-        print(report)
+        logging.error(report)
         tkMessageBox.showinfo(
             "Unable to open!",
-            f"I wasn't allowed to open '{fileName}'. You will need to perform this task manually!\n"
-            f"{report}"
+            f"I wasn't allowed to open '{fileName}'. You will need to perform this task manually!"
         )
 
 
@@ -4368,7 +4367,6 @@ class GifApp:
             "title": title,
             "body": body,
         })
-        print(f'{url = }')
         OpenFileWithDefaultApp(url)
 
     def OpenFAQ(self):
