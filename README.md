@@ -13,7 +13,7 @@ Please take part in the process, [**file a 2.x-issue**](https://github.com/ex-ha
 - [ ] **a solid backend** - Instagiffer 2.x has a stable core module that works entirely UI-free and can be driven the same way via command line, unit tests or any interfaces.
   - [ ] **in-memory** as much as possible - We'll try to replace things that were done by ImageMagick CLI with PIL, reducing from and to disk reads and writes so things remain responsive in the UI and you get to your results quicker.
   - [ ] **serializable projects** - what you put together you can revisit, spin it off some more, remix, or share recipes with others. The backend will save things into its temp (If you want that! It can be optional of course) and make it available to the UI to fill out fields and all.
-  - [ ] ****
+  - [ ] **beyond gif** - we'll explore outputting other formats to convey the gif-idea. There's already a multitude of ways to input things and since we're still powered by `ffmpeg` it'd be easy to go for new animated image and video formats too.
 - [ ] **fresh frontend**  - Tkinter shows it's age. It deserves our respect but honestly: **Qt for Python** ran so far ahead! There is [so much on board already](https://doc.qt.io/qtforpython-6/api.html#pyside-api) we can use:
   - [ ] **Signals and threads** - responsive UIs are not only about changing window size and High-DPI. That will come as well!! but also non-blocking tasks and background workers that make things available asap.
   - [ ] **Themes** - dark/light mode is nothing new anymore but that will come almost out of the box with Qt. And much more. Might be we spin up a retro Tk-flavor theme to remember the good times.
