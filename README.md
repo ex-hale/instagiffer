@@ -1,134 +1,20 @@
-# Instagiffer
+# Instagiffer 🚧 2.x WIP 🚧
 
-![Logo](assets/app_icon.png "Instagiffer Logo")
+We're about to bring this classic into a new era! There are great plans but whatever will happen here: Instagiffer will remain an easy to use, free for all tool.
 
-Whether you pronounce it GIF, or GIF, Instagiffer is the perfect tool for creating the best reaction moments to any situation. Sometimes, only a GIF will do in a conversation, and can say so much by saying so little. If you find yourself struggling to find the perfect GIF, look no more. Just make your own. It's easy. Promise.
+This being said: **Things can and will break**! If you want a stable version please refer to the [main branch](https://github.com/ex-hale/instagiffer/tree/master) and [it's latest releases](https://github.com/ex-hale/instagiffer/releases).
 
-Instagiffer was designed during an era where websites would limit upload file sizes to 1MB, therefore, my primary goal was to generate highly-optimized GIFs that still looked great. It started out as a CLI script which I used for my personal GIF creations and it grew organically from there. The user experience was never my primary focus, so the UI is a bit quirky. Help me improve it!
+## Be a part!
 
-## Architecture
+Please take part in the process, [**file a 2.x-issue**](https://github.com/ex-hale/instagiffer/issues/new?labels=2.x) and lets discuss ideas and features!
 
-Instagiffer is a single-file Python application (`instagiffer.py`) built with a Tkinter GUI. It orchestrates several external tools to turn videos into optimized GIFs: FFmpeg extracts frames from video files, ImageMagick handles effects, cropping, text overlays, and GIF compression, and gifsicle provides optional further optimization. Videos can be loaded from local files or downloaded from YouTube and other sites via yt-dlp. All configuration is stored in an INI file (`instagiffer.conf`) managed by Python's configparser.
+## Ideas so far
 
-## Setting Up Your Development Environment
+- [ ] **a solid backend** - Instagiffer has a stable core module that works entirely UI-free and can be driven the same way via command line, unit tests or any interfaces.
+  - [ ] **in-memory** as much as possible - We'll try to replace things that were done by ImageMagick CLI with PIL, reducing from and to disk reads and writes so things remain responsive in the UI and you get to your results quicker.
+  - [ ] **serializable projects** - what you put together you can revisit, spin it off some more, remix, or share recipes with others. The backend will save things into its temp (If you want that! It can be optional of course) and make it available to the UI to fill out fields and all.
+- [ ] **Qt for Python** frontend - Tkinter shows it's age. It deserves our respect but honestly: Qt ran so far ahead! There is so much we can use
+  - [ ] **Signals and threads** - responsive UIs are not only about changing window size and High-DPI. That will come as well!! but also non blocking tasks and background workers that make things available asap.
+  - [ ] **Themes** - dark/light mode is nothing new anymore but that will come almost out of the box with Qt. And much more. Might be we spin up a retro Tk-flavor theme to remember the good times.
 
-### macOS
-
-Requires [Homebrew](https://brew.sh).
-
-```bash
-git clone https://github.com/ex-hale/instagiffer.git
-cd instagiffer
-make deps    # Installs Homebrew packages, creates .venv, builds platform dependencies
-make run     # Launches the app
-```
-
-### Windows
-
-Prerequisites (one-time setup on a fresh machine). In any PowerShell prompt:
-
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\install-devtools.ps1
-```
-
-This uses [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/) (built into
-Windows 11) to install Python 3.13, Git for Windows, GNU Make, and Inno Setup 6. Then open a new
-Git Bash window:
-
-```bash
-git clone https://github.com/ex-hale/instagiffer.git
-cd instagiffer
-make deps    # Downloads ffmpeg, yt-dlp, gifsicle, and ImageMagick into deps/win/
-make run     # Launches the app
-```
-
-> **Tip:** If you see a PowerShell execution policy error when activating the venv, run
-> `Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser` once to make it permanent.
-
-## Development
-
-The Makefile provides all common development tasks:
-
-```bash
-make init       # Create venv and install dependencies
-make run        # Run the application
-make test       # Run pytest suite (downloads test videos on first run)
-make lint       # Run pylint
-make format     # Run black formatter (line length: 200)
-make clean      # Remove build artifacts, venv, test data
-make dist       # Build distributable (DMG on macOS, installer on Windows)
-```
-
-Configuration is in `pyproject.toml`. Black is configured with a 200-character line length.
-
-## Building a Release
-
-Before releasing, double-check:
-- Version numbers updated in `instagiffer.py`?
-- Help links work?
-- Tested on a vanilla Mac/Windows VM?
-
-```bash
-make dist    # Build distributable (DMG on macOS, installer on Windows)
-```
-
-Output goes to `dist/`. All dependencies are fetched automatically.
-
-> **Note:** The macOS app is not notarized, so users will need to right-click and select
-> "Open" on first launch to bypass the Gatekeeper warning.
-
-## Testing
-
-### Test URLs
-- https://www.youtube.com/watch?v=EPP7WLuZVUk
-
-### Regression Test Checklist
-
-These are being migrated into the automated test suite (`make test`). Until then, run through manually before a release.
-
-- Online downloads
-  - YouTube (especially popular music videos)
-  - TikTok, Instagram Reels, Reddit
-- Videos where h > w, w == h, w > h
-- Invalid video formats
-- Cellphone videos shot in portrait and landscape
-- Corrupted video
-- Any videos that revealed a bug previously
-- Image sequence
-- Image sequence with bad image in the middle
-- Image sequence of 1
-- Unicode paths
-- Cinemagraphs
-- Settings at extremes
-- Specify time out of range
-- GIF overwrite on and off
-- Different YouTube qualities
-- Screen capture
-- Check for memory leaks
-- Super-long GIF
-- Help > Generate Bug Report
-- Make a 5 second GIF using screen capture. If you have a second monitor, capture something there.
-- Frames > Export Frames (pick a folder and ensure the frames are correctly exported)
-- Frames > Delete Frames. Delete all even frames
-- Frames > Import Frames - use the frames you just exported (you can multi-select)
-- Create a GIF of people having a dialog with text captions. Do this using a YouTube video.
-- Create a GIF 10 seconds or longer, and under 1MB
-- Input invalid data
-- Unpopular video formats or sites
-- Button-smash the GUI (hit Escape to interrupt events)
-- Load invalid or corrupted movie files
-- Edit `instagiffer.conf` and muck around with config parameters (requires restart)
-
-## Look and Feel
-
-### Color
-Main Color: `#395976`
-
-### Font
-
-"Bookman Old Style"
-
-## License
-
-BSD 4-Clause. See [main.py](main.py) for the full license text.
+much more to come ...
