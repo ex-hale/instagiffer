@@ -1,0 +1,8 @@
+brew "python3"
+brew "python-tk"
+brew "pkg-config"
+brew "cmake"
+brew "gperf"
+brew "gifsicle"
+brew "create-dmg"
+brew "gh"

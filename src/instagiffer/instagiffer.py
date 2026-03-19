@@ -33,7 +33,7 @@
 
 """instagiffer.py: The easy way to make GIFs"""
 
-__version__ = "1.78.0"
+__version__ = "1.79.0"
 __author__ = "Justin Todd"
 __copyright__ = "Copyright 2013-2026, Exhale Software Inc."
 __maintainer__ = "Justin Todd"
@@ -131,7 +131,7 @@ def GetDisplayScaleFactor():
 
 def OpenFileWithDefaultApp(fileName):
     """Open a file in the application associated with this file extension"""
-    if sys.platform == "darwin":
+    if not ImAPC():
         subprocess.Popen(["open", fileName])
     else:
         try:
@@ -264,11 +264,11 @@ def DefaultOutputHandler(stdoutLines, stderrLines, cmd):
     i = False
 
     for outData in [stdoutLines, stderrLines, cmd]:
-        if outData is None or len(outData) == 0:
+        if not outData:
             continue
 
-        if ImAMac() and type(outData) == list:
-            outData = " ".join('"{0}"'.format(arg) for arg in outData)
+        if not ImAPC() and isinstance(outData, list):
+            outData = " ".join(f'"{arg}"' for arg in outData)
 
         # yt-dlp
         youtubeDlSearch = re.search(r"\[download\]\s+([0-9\.]+)% of", outData, re.MULTILINE)
@@ -321,7 +321,7 @@ def RunProcess(
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
-    elif ImAMac():
+    else:
         startupinfo = None
         cmd = shlex.split(cmd)
 
@@ -2715,9 +2715,12 @@ class GifApp:
 
         if ImAPC():
             self.parent.wm_iconbitmap("instagiffer.ico")
-        elif ImAMac():
+        else:
             try:
-                icon = PIL.ImageTk.PhotoImage(PIL.Image.open("instagiffer.icns"))
+                if ImAMac():
+                    icon = PIL.ImageTk.PhotoImage(PIL.Image.open("instagiffer.icns"))
+                else:
+                    icon = PIL.ImageTk.PhotoImage(PIL.Image.open("assets/logo.png"))
                 self.parent.wm_iconphoto(True, icon)
                 self._app_icon = icon  # prevent GC
             except (OSError, TclError):
@@ -3195,6 +3198,9 @@ class GifApp:
 
         if ImAPC():
             self.spnDuration.bind("<MouseWheel>", self.OnDurationMouseWheel)
+        elif not ImAMac():
+            self.spnDuration.bind("<Button-4>", lambda e: self.OnDurationMouseWheel(e))
+            self.spnDuration.bind("<Button-5>", lambda e: self.OnDurationMouseWheel(e))
 
         valueFontColor = "#353535"
 
@@ -3515,7 +3521,7 @@ class GifApp:
 
     def BindKeybindings(self):
         """Read [keybindings] from config and bind them. Mod+ maps to Command on macOS, Control on Windows."""
-        mod = "Command" if sys.platform == "darwin" else "Control"
+        mod = "Command" if ImAMac() else "Control"
         actions = {
             "creategif": lambda e: self.OnCreateGif(),
             "loadvideo": lambda e: self.OnLoadVideo(),
