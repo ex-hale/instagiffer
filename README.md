@@ -17,7 +17,7 @@ Please take part in the process, [**file a 2.x-issue**](https://github.com/ex-ha
 - [ ] **fresh frontend**  - Tkinter shows it's age. It deserves our respect but honestly: **Qt for Python** ran so far ahead! There is [so much on board already](https://doc.qt.io/qtforpython-6/api.html#pyside-api) we can use:
   - [ ] **Signals and threads** - responsive UIs are not only about changing window size and High-DPI. That will come as well!! but also non-blocking tasks and background workers that make things available asap.
   - [ ] **Themes** - dark/light mode is nothing new anymore but that will come almost out of the box with Qt. And much more. Might be we spin up a retro Tk-flavor theme to remember the good times.
-  - [ ] **built-in packaging** Qt for Python comes with [pyside6-deploy](https://doc.qt.io/qtforpython-6/deployment/deployment-pyside6-deploy.html#pyside6-deploy) we might replace some of our build tooling and get fast and solid packages for all platforms (including Android?)
+  - [ ] **built-in packaging** Qt for Python comes with [pyside6-deploy](https://doc.qt.io/qtforpython-6/deployment/deployment-pyside6-deploy.html#pyside6-deploy) we might replace some of our build tooling and get fast and solid packages for all platforms ([including Android?](https://doc.qt.io/qtforpython-6/deployment/deployment-pyside6-android-deploy.html))
   - [ ] **Translated UI** - let's try to incorporate [**weblate**](https://weblate.org) for internationalized texts and documentation (Qt has it's own translation tool. Might also work, let's investigate, but no idea how it fits with community internationalization)
 - [ ] **fresh DX** - let's also try some of these fancy new developer tools like `uv`, `ruff` and `ty` by [astral.sh](https://astral.sh/)
 
