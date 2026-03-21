@@ -60,6 +60,8 @@ addopts = "-v --tb=short"
 [tool.ruff]
 line-length = 120
 target-version = "py314"
+[tool.ruff.format]
+quote-style = "single"
 [tool.ruff.lint]
 select = [
     "E",  # pycodestyle errors
