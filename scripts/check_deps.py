@@ -1,62 +1,93 @@
 from __future__ import annotations
 
 import io
-import os
 import sys
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
-IM_A_MAC: bool = sys.platform == 'darwin'
-IM_A_PC: bool = sys.platform == 'win32'
 IM_A_LINUX: bool = sys.platform == 'linux'
+IM_A_WIN: bool = sys.platform == 'win32'
+IM_A_MAC: bool = sys.platform == 'darwin'
 _ROOT = Path(__file__).parent.parent
 _DEPS_PATH = _ROOT / 'deps'
+CHECK = b'\xe2\x9c\x94'.decode()
+EX = b'\xe2\x9c\x96'.decode()
 
-
-_EXES = 'ffmpeg', 'ffprobe'
-if IM_A_PC:
-    EXES: tuple[str, ...] = tuple(f'{name}.exe' for name in _EXES)
-    FFMPEG_URL = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip'
+_FF_EXES = 'ffmpeg', 'ffprobe'
+_FFMPEG_BTBN = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/'
+if IM_A_WIN:
+    FF_EXES: tuple[str, ...] = tuple(f'{name}.exe' for name in _FF_EXES)
+    FFMPEG_URL = f'{_FFMPEG_BTBN}ffmpeg-master-latest-win64-gpl.zip'
     DEPS_DIR = _DEPS_PATH / 'win'
 elif IM_A_LINUX:
-    EXES: tuple[str, ...] = _EXES
-    FFMPEG_URL = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz'
+    FF_EXES: tuple[str, ...] = _FF_EXES
+    FFMPEG_URL = f'{_FFMPEG_BTBN}ffmpeg-master-latest-linux64-gpl.tar.xz'
     DEPS_DIR = _DEPS_PATH / 'linux'
 elif IM_A_MAC:
-    EXES: tuple[str, ...] = _EXES
-    FFMPEG_URL = 'https://evermeet.cx/ffmpeg/getrelease/zip'
+    evermeet_repo = 'https://evermeet.cx/ffmpeg/getrelease/'
+    FF_EXES: tuple[str, ...] = _FF_EXES
+    FFMPEG_URL = f'{evermeet_repo}zip'
+    FFPROBE_URL = f'{evermeet_repo}ffprobe/zip'
     DEPS_DIR = _DEPS_PATH / 'mac'
-
 
 _HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'}
 _CHUNK_SIZE = 8192
 
-DEPS_DIR = DEPS_DIR.parent / 'linux'
-EXES: tuple[str, ...] = _EXES
 
 def main():
-    if all((DEPS_DIR / name).is_file() for name in EXES):
-        print('All ffmpeg dependencies fullified!')
-        return
+    print(f'Checking dependencies: {DEPS_DIR} ...')
+    all_good = True
+    if not check_ffmpeg():
+        all_good = False
 
-    import tarfile
+    if all_good:
+        print(f'{CHECK} all dependencies checked!')
 
-    url = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz'
-    stored = DEPS_DIR / os.path.basename(url)
-    if stored.is_file():
-        with open(stored, 'rb') as file_object:
-            package_bytes = file_object.read()
+
+def ffmpeg_mising():
+    missing = []
+    for name in FF_EXES:
+        if (DEPS_DIR / name).is_file():
+            continue
+        missing.append(name)
+    return missing
+
+
+def check_ffmpeg():
+    if not ffmpeg_mising():
+        print(f'  {CHECK} Ffmpeg')
+        return True
+
+    if IM_A_MAC:
+        _check_ffmpeg_mac()
     else:
         print('  Downloading ffmpeg ...')
-        package_bytes = read_raw(url)
+        package_buffer = read_into_buffer(FFMPEG_URL)
 
-    print('  Opening package ...')
-    with tarfile.open(fileobj=io.BytesIO(package_bytes), mode='r:xz') as tar_object:
+        print('  Opening package ...')
+        if IM_A_LINUX:
+            _check_ffmpeg_linux(package_buffer)
+        else:
+            _check_ffmpeg_win(package_buffer)
+
+    mising = ffmpeg_mising()
+    if not mising:
+        print(f'  {CHECK} Ffmpeg Done!')
+        return True
+    print(f'  {EX} FFmpreg files missing: {mising}')
+    return False
+
+
+def _check_ffmpeg_linux(io_object: io.BytesIO):
+    """Open the linux specific tar.xz and extract our needed exectuables."""
+    import tarfile
+
+    with tarfile.open(fileobj=io_object, mode='r:xz') as tar_object:
         for member in tar_object.getmembers():
             if not member.isfile():
                 continue
-            if not any(member.name.endswith(name) for name in EXES):
+            if not any(member.name.endswith(name) for name in FF_EXES):
                 continue
             this_path = Path(member.name)
             if this_path.parent.name != 'bin':
@@ -64,13 +95,40 @@ def main():
             member.name = this_path.name
             tar_object.extract(member, path=DEPS_DIR)
 
-    print('Ffmpeg Done!')
+
+def _check_ffmpeg_win(io_object: io.BytesIO):
+    import zipfile
+
+    with zipfile.ZipFile(io_object) as zip_object:
+        for member in zip_object.filelist:
+            if member.is_dir():
+                continue
+            if not any(member.filename.endswith(name) for name in FF_EXES):
+                continue
+            this_path = Path(member.filename)
+            if this_path.parent.name != 'bin':
+                continue
+            member.filename = this_path.name
+            zip_object.extract(member, DEPS_DIR)
+
+
+def _check_ffmpeg_mac():
+    """Download ffmpeg and ffprobe separately because the official mac binary
+    repo offers it that way.
+    """
+    import zipfile
+
+    for name, url in zip(FF_EXES, (FFMPEG_URL, FFPROBE_URL), strict=True):
+        print(f'  Downloading {name} ...')
+        buffer_bytes = read_into_buffer(url)
+        with zipfile.ZipFile(buffer_bytes) as zip_object:
+            zip_object.extractall(DEPS_DIR)
+
 
 class DownloadCB:
-    def __init__(self, name: str):
+    def __init__(self):
         import rich.progress
 
-        self._name = name
         self._progress = rich.progress.Progress(
             '[progress.description]{task.description}',
             rich.progress.BarColumn(),
@@ -107,7 +165,7 @@ def read_raw(url: str, progress_callback: Callable | None = None, size: int | No
     :raises urllib.error.URLError: If the URL cannot be reached.
     """
     if progress_callback is None:
-        progress_callback = DownloadCB(os.path.basename(url)).callback
+        progress_callback = DownloadCB().callback
     request = urllib.request.Request(url, headers=_HEADERS)
     with urllib.request.urlopen(request) as response:
         total = int(response.headers.get('Content-Length', -1))
@@ -127,6 +185,36 @@ def read_raw(url: str, progress_callback: Callable | None = None, size: int | No
             progress_callback(current, total)
 
         return b''.join(chunks)
+
+
+def read_into_buffer(url: str, progress_callback: Callable | None = None) -> io.BytesIO:
+    """Fetch contents of `url` and return them as io buffer object.
+
+    Downloads the response in chunks of :data:`_CHUNK_SIZE` bytes, calling
+    ``progress_callback(current, total)`` after each chunk. If ``total`` is
+    unknown the server did not send a ``Content-Length`` header and ``total``
+    will be ``-1``.
+
+    :param url: The URL to fetch data from.
+    :param progress_callback: Optional callable receiving (current: int, total: int) byte counts
+        as the download progresses. Falls back to debug logging if not provided.
+    :return: All of the response bytes in io.BytesIO object.
+    :raises RuntimeError: If ``size`` is provided but is not an :class:`int`.
+    :raises urllib.error.URLError: If the URL cannot be reached."""
+    if progress_callback is None:
+        progress_callback = DownloadCB().callback
+
+    request = urllib.request.Request(url, headers=_HEADERS)
+    with urllib.request.urlopen(request) as response:
+        current = 0
+        total = int(response.headers.get('Content-Length', -1))
+        bytes_buffer = io.BytesIO()
+        for chunk in response.iter_content(chunk_size=_CHUNK_SIZE):
+            bytes_buffer.write(chunk)
+            current += len(chunk)
+            progress_callback(current, total)
+        bytes_buffer.seek(0)
+        return bytes_buffer
 
 
 if __name__ == '__main__':
