@@ -29,6 +29,7 @@ classifiers = [
 dependencies = [
     "pyside6>=6.8",
     "pillow>=10.0",
+    "yt-dlp>=2026.3.17",
 ]
 
 [dependency-groups]
@@ -37,6 +38,7 @@ dev = [
     "ruff",
     "ty",
     "poethepoet",
+    "rich>=14.3.3",
 ]
 
 [project.urls]
@@ -56,7 +58,7 @@ testpaths = ["test"]
 addopts = "-v --tb=short"
 
 [tool.ruff]
-line-length = 200
+line-length = 120
 target-version = "py314"
 [tool.ruff.lint]
 select = [
@@ -74,3 +76,6 @@ ignore = [
 
 [tool.ruff.lint.isort]
 known-first-party = ["instagiffer"]
+
+[tool.poe.tasks]
+deps = { cmd = "python scripts/check_deps.py", help = "Make sure binary dependencies are present and up-to-date." }
