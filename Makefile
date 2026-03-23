@@ -228,11 +228,11 @@ INSTALL_PATH	:= /opt/instagiffer
 # to avoid NTFS permission issues with dpkg-deb.
 IN_MNT := $(filter /mnt/%,$(CURDIR))
 ifdef IN_MNT
+	DIST_ARTIFACT	:= /tmp/instagiffer_$(VERSION)_amd64.deb
+	DEB_ROOT		:= /tmp/deb_pkg
+else
 	DIST_ARTIFACT	:= dist/instagiffer_$(VERSION)_amd64.deb
 	DEB_ROOT		:= dist/deb_pkg
-else
-	DIST_ARTIFACT	:= /tmp/instagiffer_$(VERSION)_amd64.deb
-  DEB_ROOT		:= /tmp/deb_pkg
 endif
 DEB_OUT			:= $(DIST_ARTIFACT)
 DEB_COMPRESS	?= gzip # override with: make dist DEB_COMPRESS=xz
@@ -266,7 +266,7 @@ $(DIST_STAMP): $(VENV_STAMP) instagiffer.py main.py instagiffer.conf $(DEPS_STAM
 	@touch $@
 
 dist: $(DIST_STAMP)
-	@echo "  Building package tree ..."
+	@echo "  Building package tree in $(DEB_ROOT) ..."
 	@rm -rf $(DEB_ROOT)
 	@mkdir -p $(DEB_ROOT)/DEBIAN
 	@mkdir -p $(DEB_ROOT)$(INSTALL_PATH)
