@@ -209,7 +209,10 @@ def read_into_buffer(url: str, progress_callback: Callable | None = None) -> io.
         current = 0
         total = int(response.headers.get('Content-Length', -1))
         bytes_buffer = io.BytesIO()
-        for chunk in response.iter_content(chunk_size=_CHUNK_SIZE):
+        while True:
+            chunk = response.read(_CHUNK_SIZE)
+            if not chunk:
+                break
             bytes_buffer.write(chunk)
             current += len(chunk)
             progress_callback(current, total)
