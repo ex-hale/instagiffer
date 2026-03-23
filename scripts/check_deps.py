@@ -35,8 +35,8 @@ _HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) G
 _CHUNK_SIZE = 8192
 
 
-def main():
-    print(f'Checking dependencies: {DEPS_DIR} ...')
+def main() -> None:
+    print(f'Checking dependencies: {DEPS_DIR.name} ...')
     all_good = True
     if not check_ffmpeg():
         all_good = False
@@ -45,16 +45,10 @@ def main():
         print(f'{CHECK} all dependencies checked!')
 
 
-def ffmpeg_mising():
-    missing = []
-    for name in FF_EXES:
-        if (DEPS_DIR / name).is_file():
-            continue
-        missing.append(name)
-    return missing
-
-
-def check_ffmpeg():
+def check_ffmpeg() -> bool:
+    """Make sure ffmpeg and ffprobe are locally available.
+    Sadly all the platforms have their specialties.
+    """
     if not ffmpeg_mising():
         print(f'  {CHECK} Ffmpeg')
         return True
@@ -79,8 +73,13 @@ def check_ffmpeg():
     return False
 
 
-def _check_ffmpeg_linux(io_object: io.BytesIO):
-    """Open the linux specific tar.xz and extract our needed exectuables."""
+def ffmpeg_mising() -> list[str]:
+    """Get list of missing executable names if any."""
+    return [x for x in FF_EXES if not (DEPS_DIR / x).is_file()]
+
+
+def _check_ffmpeg_linux(io_object: io.BytesIO) -> None:
+    """Open linux specific tar.xz-buffer and extract our exectuables from `bin`."""
     import tarfile
 
     with tarfile.open(fileobj=io_object, mode='r:xz') as tar_object:
@@ -96,7 +95,8 @@ def _check_ffmpeg_linux(io_object: io.BytesIO):
             tar_object.extract(member, path=DEPS_DIR)
 
 
-def _check_ffmpeg_win(io_object: io.BytesIO):
+def _check_ffmpeg_win(io_object: io.BytesIO) -> None:
+    """Open the Windows zip-buffer and extract executables from `bin`."""
     import zipfile
 
     with zipfile.ZipFile(io_object) as zip_object:
@@ -112,9 +112,9 @@ def _check_ffmpeg_win(io_object: io.BytesIO):
             zip_object.extract(member, DEPS_DIR)
 
 
-def _check_ffmpeg_mac():
-    """Download ffmpeg and ffprobe separately because the official mac binary
-    repo offers it that way.
+def _check_ffmpeg_mac() -> None:
+    """Download ffmpeg and ffprobe separately in these 1 file only zips.
+    The mac binary repo offers them that way.
     """
     import zipfile
 
