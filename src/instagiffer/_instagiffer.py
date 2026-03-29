@@ -1,5 +1,4 @@
 # /usr/bin/env python
-# -*- coding: utf-8 -*-
 #
 # Copyright (c) 2013-2026 Exhale Software Inc.
 # All rights reserved.
