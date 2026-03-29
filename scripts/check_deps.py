@@ -1,35 +1,25 @@
 from __future__ import annotations
 
 import io
-import sys
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path
 
-IM_A_LINUX: bool = sys.platform == 'linux'
-IM_A_WIN: bool = sys.platform == 'win32'
-IM_A_MAC: bool = sys.platform == 'darwin'
-_ROOT = Path(__file__).parent.parent
-_DEPS_PATH = _ROOT / 'deps'
-CHECK = b'\xe2\x9c\x94'.decode()
-EX = b'\xe2\x9c\x96'.decode()
+from instagiffer.common import CHECK, DEPS_DIR, EX, IM_A_LINUX, IM_A_MAC, IM_A_WIN
 
 _FF_EXES = 'ffmpeg', 'ffprobe'
 _FFMPEG_BTBN = 'https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/'
 if IM_A_WIN:
     FF_EXES: tuple[str, ...] = tuple(f'{name}.exe' for name in _FF_EXES)
     FFMPEG_URL = f'{_FFMPEG_BTBN}ffmpeg-master-latest-win64-gpl.zip'
-    DEPS_DIR = _DEPS_PATH / 'win'
 elif IM_A_LINUX:
     FF_EXES: tuple[str, ...] = _FF_EXES
     FFMPEG_URL = f'{_FFMPEG_BTBN}ffmpeg-master-latest-linux64-gpl.tar.xz'
-    DEPS_DIR = _DEPS_PATH / 'linux'
 elif IM_A_MAC:
     evermeet_repo = 'https://evermeet.cx/ffmpeg/getrelease/'
     FF_EXES: tuple[str, ...] = _FF_EXES
     FFMPEG_URL = f'{evermeet_repo}zip'
     FFPROBE_URL = f'{evermeet_repo}ffprobe/zip'
-    DEPS_DIR = _DEPS_PATH / 'mac'
 
 _HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'}
 _CHUNK_SIZE = 8192
