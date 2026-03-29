@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shutil
@@ -10,19 +11,24 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from instagiffer.common import DEPS_DIR, IM_A_WIN
+
 log = logging.getLogger(__name__)
 
 # Output frame filename pattern - 1-indexed, zero-padded to 4 digits
 FRAME_PATTERN = 'image%04d.png'
 FRAME_GLOB = 'image*.png'
-
-
-class FFmpegError(Exception):
-    """Raised when ffmpeg encounters an error."""
-
-
-class FFmpegNotFoundError(FFmpegError):
-    """Raised when the ffmpeg executable cannot be located."""
+_EXT = '' if not IM_A_WIN else '.exe'
+FFMPEG = 'ffmpeg'
+FFPROBE = 'ffprobe'
+FFMPEG_EXE = f'{FFMPEG}{_EXT}'
+FFPROBE_EXE = f'{FFPROBE}{_EXT}'
+EXECUTABLES = FFMPEG_EXE, FFPROBE_EXE
+_NOT_FOUND_MSG = (
+    '{} not found in environment PATH!\n'
+    'Use `uv run poe deps` to get the executables locally or\n'
+    'Install it system wide and make sure it is on your environment PATH.'
+)
 
 
 @dataclass
@@ -43,15 +49,19 @@ class VideoInfo:
     def aspect_ratio(self) -> float:
         return self.width / self.height if self.height else 0.0
 
+    def __iter__(self):
+        for attr in ('width', 'height', 'aspect_ratio', 'duration_sec', 'duration_ms', 'fps', 'codec'):
+            yield attr, getattr(self, attr)
 
-class FFmpegWrapper:
+
+class FFmwrapp:
     """
-    Thin wrapper around the ``ffmpeg`` executable.
+    Thin wrapper around the `ffmpeg` executable.
 
     Usage::
 
-        ffmpeg = FFmpegWrapper()                       # auto-locate in PATH
-        ffmpeg = FFmpegWrapper(Path('/usr/bin/ffmpeg'))  # explicit path
+        ffmpeg = FFmwrapp()                         # auto-locate in PATH
+        ffmpeg = FFmwrapp(Path('/usr/bin/ffmpeg'))  # explicit path
 
         info = ffmpeg.get_video_info(Path('clip.mp4'))
         frames = ffmpeg.extract_frames(
@@ -65,18 +75,9 @@ class FFmpegWrapper:
     """
 
     def __init__(self, ffmpeg_path: Path | None = None) -> None:
-        if ffmpeg_path is not None:
-            self.ffmpeg = Path(ffmpeg_path)
-            if not self.ffmpeg.exists():
-                raise FFmpegNotFoundError(f'ffmpeg not found at: {self.ffmpeg}')
-        else:
-            found = shutil.which('ffmpeg')
-            if found is None:
-                raise FFmpegNotFoundError(
-                    'ffmpeg not found in PATH. Install ffmpeg and make sure it is on your PATH.'
-                )
-            self.ffmpeg = Path(found)
-
+        self.ffmpeg: Path = DEPS_DIR / FFMPEG_EXE
+        self.ffprobe: Path = DEPS_DIR / FFPROBE_EXE
+        self._check_paths(ffmpeg_path)
         log.debug('Using ffmpeg: %s', self.ffmpeg)
 
     def get_video_info(self, video_path: Path) -> VideoInfo:
@@ -87,24 +88,30 @@ class FFmpegWrapper:
         side-rotation (90°/270° → swap width and height).
         """
         video_path = Path(video_path)
-        if not video_path.exists():
+        if not video_path.is_file():
             raise FileNotFoundError(f'Video not found: {video_path}')
 
-        # ffmpeg writes stream info to stderr even when it "fails" (exit 1 is normal)
+        if not self.ffprobe.is_file():
+            from instagiffer._ffmpeg_video_info_fallback import get_video_info
+
+            return get_video_info(self.ffmpeg, video_path)
+
         result = subprocess.run(
-            [str(self.ffmpeg), '-i', str(video_path)],
+            [self.ffprobe, '-v', 'quiet', '-print_format', 'json', '-show_streams', video_path],
             capture_output=True,
             text=True,
         )
-        output = result.stderr
+        data = json.loads(result.stdout)
+        if not data or 'streams' not in data or not data['streams']:
+            raise FFmpegError(f'Could not extract video info from {video_path}')
 
-        width, height = _parse_resolution(output)
-        duration_sec = _parse_duration(output)
-        fps = _parse_fps(output)
-        codec = _parse_codec(output)
-
+        stream = data['streams'][0]
         return VideoInfo(
-            width=width, height=height, duration_sec=duration_sec, fps=fps, codec=codec
+            width=stream.get('width', 0),
+            height=stream.get('height', 0),
+            duration_sec=float(stream.get('duration', 0)),
+            fps=float(stream.get('avg_frame_rate', '').rstrip('/1')),
+            codec=stream.get('codec_name', '')
         )
 
     def extract_frames(
@@ -135,11 +142,11 @@ class FFmpegWrapper:
             FFmpegError:       If ffmpeg exits non-zero or no frames are produced.
         """
         video_path = Path(video_path)
+        if not video_path.is_file():
+            raise FileNotFoundError(f'Video not found: {video_path}')
+
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
-
-        if not video_path.exists():
-            raise FileNotFoundError(f'Video not found: {video_path}')
 
         # Build command.
         # -ss before -i  →  fast keyframe seek (accurate enough for GIF use)
@@ -172,16 +179,11 @@ class FFmpegWrapper:
         process.wait()
 
         if process.returncode != 0:
-            raise FFmpegError(
-                f'ffmpeg exited with code {process.returncode}. Command: {" ".join(cmd)}'
-            )
+            raise FFmpegError(f'ffmpeg exited with code {process.returncode}. Command: {" ".join(cmd)}')
 
         frames = sorted(output_dir.glob(FRAME_GLOB))
         if not frames:
-            raise FFmpegError(
-                f'No frames were extracted from "{video_path.name}". '
-                'Is it a supported video format?'
-            )
+            raise FFmpegError(f'No frames were extracted from "{video_path.name}". Is it a supported video format?')
 
         log.info('Extracted %d frames from "%s"', len(frames), video_path.name)
 
@@ -190,62 +192,35 @@ class FFmpegWrapper:
 
         return frames
 
+    def _check_paths(self, ffmpeg_path: Path | None = None):
+        """If were not using default paths, check for given or system paths"""
+        if ffmpeg_path is None and self.ffmpeg.is_file() and self.ffprobe.is_file():
+            return
 
-def _parse_resolution(ffmpeg_output: str) -> tuple[int, int]:
-    """Parse width x height from ffmpeg stderr, correcting for SAR/DAR and rotation."""
-    match = re.search(r'Stream.*Video.*\s(\d+)x(\d+)', ffmpeg_output)
-    if not match:
-        raise FFmpegError('Could not determine video resolution.')
+        if ffmpeg_path is not None:
+            this_path = Path(ffmpeg_path)
+            if this_path.is_dir():
+                ff_test = this_path / FFMPEG_EXE
+                if ff_test.is_file():
+                    self.ffmpeg = ff_test
+                ff_test = this_path / FFPROBE_EXE
+                if ff_test.is_file():
+                    self.ffprobe = ff_test
+            elif this_path.is_file():
+                self.ffmpeg = this_path
+                ff_test = this_path.parent / FFPROBE_EXE
+                if ff_test.is_file():
+                    self.ffprobe = ff_test
+            else:
+                logging.error(f'Could not make sense of given {ffmpeg_path = }, checking system ...')
 
-    width, height = int(match.group(1)), int(match.group(2))
-
-    # Non-square pixels: recompute width from display aspect ratio
-    sar_match = re.search(r'SAR (\d+):(\d+) DAR (\d+):(\d+)', ffmpeg_output)
-    if sar_match:
-        sar_x, sar_y = int(sar_match.group(1)), int(sar_match.group(2))
-        dar_x, dar_y = int(sar_match.group(3)), int(sar_match.group(4))
-        r_sar = sar_x / sar_y
-        r_dar = dar_x / dar_y
-        if r_sar != 1.0 and r_dar != r_sar:
-            log.debug('Non-square pixels (SAR %.2f, DAR %.2f) — adjusting width', r_sar, r_dar)
-            width = round(height * r_dar)
-
-    # Phone videos filmed sideways
-    if re.search(r'rotate\s*:\s*(?:90|270|-90|-270)', ffmpeg_output):
-        log.debug('Side rotation detected — swapping width and height')
-        width, height = height, width
-
-    return width, height
-
-
-def _parse_duration(ffmpeg_output: str) -> float:
-    """Return video duration in seconds from ffmpeg stderr."""
-    match = re.search(r'Duration:\s*(\d+:\d+:\d+\.\d+)', ffmpeg_output)
-    if not match:
-        raise FFmpegError('Could not determine video duration.')
-    return _duration_str_to_sec(match.group(1))
-
-
-def _parse_fps(ffmpeg_output: str) -> float:
-    """
-    Return frame rate from ffmpeg stderr.
-
-    Prefers ``X fps`` (display rate) over ``X tbr`` (timebase rate).
-    Falls back to 25 fps with a warning.
-    """
-    match = re.search(r'(\d+(?:\.\d+)?)\s+fps', ffmpeg_output)
-    if not match:
-        match = re.search(r'(\d+(?:\.\d+)?)\s+tbr', ffmpeg_output)
-    if not match:
-        log.warning('Could not determine video FPS — defaulting to 25')
-        return 25.0
-    return float(match.group(1))
-
-
-def _parse_codec(ffmpeg_output: str) -> str:
-    """Return the video codec name (e.g. 'h264') or empty string."""
-    match = re.search(r'Video:\s+(\w+)', ffmpeg_output)
-    return match.group(1) if match else ''
+        else:
+            this_path = shutil.which(FFMPEG_EXE)
+            if not this_path:
+                raise FFmpegNotFoundError(_NOT_FOUND_MSG.format(FFMPEG))
+            this_path = shutil.which(FFPROBE_EXE)
+            if not this_path:
+                logging.warning(_NOT_FOUND_MSG.format(FFPROBE), '\nUsing backup parser.')
 
 
 def _duration_str_to_sec(s: str) -> float:
@@ -254,8 +229,17 @@ def _duration_str_to_sec(s: str) -> float:
     return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
 
 
+class FFmpegError(Exception):
+    """Raised when ffmpeg encounters an error."""
+
+
+class FFmpegNotFoundError(FFmpegError):
+    """Raised when the ffmpeg executable cannot be located."""
+
+
 if __name__ == '__main__':
     import pytest
 
-    from tests.unit import test_ffmpeg
+    from test import test_ffmpeg
+
     pytest.main([test_ffmpeg.__file__, '-v'])
