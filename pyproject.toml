@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "instagiffer"
-version = "2.0.0"
+version = "2.0.0.alpha"
 description = "The easy way to make GIFs from videos"
 readme = "README.md"
 license = "BSD-4-Clause"
