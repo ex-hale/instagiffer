@@ -32,5 +32,13 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
+__version__ = "2.0.0.alpha"
 
 
+def main():
+    import instagiffer.ui
+    instagiffer.ui.show()
+
+
+if __name__ == '__main__':
+    main()
