@@ -12,6 +12,7 @@ LIB_PATH = Path(__file__).parent
 SOURCE_PATH = LIB_PATH.parent
 PROJECT_ROOT = SOURCE_PATH.parent
 DEPS_ROOT = PROJECT_ROOT / 'deps'
+ASSETS_PATH = PROJECT_ROOT / 'assets'
 
 if IM_A_LINUX:
     DEPS_DIR = DEPS_ROOT / 'linux'
