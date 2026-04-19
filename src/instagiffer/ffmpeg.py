@@ -9,6 +9,7 @@ import shutil
 import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
+from fractions import Fraction
 from pathlib import Path
 
 from instagiffer.common import DEPS_DIR, IM_A_WIN
@@ -78,14 +79,13 @@ class FFmwrapp:
         self.ffmpeg: Path = DEPS_DIR / FFMPEG_EXE
         self.ffprobe: Path = DEPS_DIR / FFPROBE_EXE
         self._check_paths(ffmpeg_path)
-        log.debug('Using ffmpeg: %s', self.ffmpeg)
 
     def get_video_info(self, video_path: Path) -> VideoInfo:
         """
         Return :class:`VideoInfo` for *video_path*.
 
         Handles non-square pixels (SAR/DAR correction) and phone-video
-        side-rotation (90°/270° → swap width and height).
+        side-rotation (90°/270°: swap width and height).
         """
         video_path = Path(video_path)
         if not video_path.is_file():
@@ -106,12 +106,17 @@ class FFmwrapp:
             raise FFmpegError(f'Could not extract video info from {video_path}')
 
         stream = data['streams'][0]
+        try:
+            fps = float(stream.get('avg_frame_rate', '').rstrip('/1'))
+        except ValueError:
+            fps = float(Fraction(stream.get('avg_frame_rate', '')))
+
         return VideoInfo(
             width=stream.get('width', 0),
             height=stream.get('height', 0),
             duration_sec=float(stream.get('duration', 0)),
-            fps=float(stream.get('avg_frame_rate', '').rstrip('/1')),
-            codec=stream.get('codec_name', '')
+            fps=fps,
+            codec=stream.get('codec_name', ''),
         )
 
     def extract_frames(
@@ -120,7 +125,7 @@ class FFmwrapp:
         output_dir: Path,
         fps: float,
         start_time: float = 0.0,
-        duration: float | None = None,
+        duration: float = 5.0,
         progress_callback: Callable[[float], None] | None = None,
     ) -> list[Path]:
         """
@@ -133,8 +138,8 @@ class FFmwrapp:
             video_path:        Source video file.
             output_dir:        Destination directory (created if needed).
             fps:               Frames per second to extract.
-            start_time:        Seek position in seconds before extraction.
-            duration:          How many seconds to extract (``None`` = full clip).
+            start_time:        Seek position in seconds before extraction (Default: 0.0).
+            duration:          How many seconds to extract (Default: 5 seconds).
             progress_callback: Optional callable receiving a float 0.0-1.0.
 
         Raises:
@@ -148,33 +153,30 @@ class FFmwrapp:
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
 
-        # Build command.
-        # -ss before -i  →  fast keyframe seek (accurate enough for GIF use)
-        # -stats          →  emit progress lines to stderr
-        # -sn             →  skip subtitle streams
-        cmd: list[str] = [str(self.ffmpeg), '-v', 'quiet', '-stats']
+        # -stats: emit progress lines to stderr
+        cmd: list[str] = [str(self.ffmpeg), '-v', 'quiet', '-stats', '-progress', 'pipe:1']
 
+        # -ss before -i: fast keyframe seek (accurate enough for GIF use)
         if start_time > 0:
             cmd += ['-ss', f'{start_time:.3f}']
-        if duration is not None:
-            cmd += ['-t', f'{duration:.3f}']
-
+        cmd += ['-t', f'{duration:.3f}']
         cmd += ['-i', str(video_path)]
+        # -sn: skip subtitle streams
         cmd += ['-r', str(fps), '-sn']
         cmd += [str(output_dir / FRAME_PATTERN)]
 
         log.debug('extract_frames cmd: %s', ' '.join(cmd))
 
-        process = subprocess.Popen(cmd, stderr=subprocess.PIPE, text=True)
-        assert process.stderr is not None
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        assert process.stdout is not None
 
-        for line in process.stderr:
-            log.debug('ffmpeg: %s', line.rstrip())
-            if progress_callback and duration:
-                match = re.search(r'time=(\d+:\d+:\d+\.\d+)', line)
-                if match:
-                    elapsed = _duration_str_to_sec(match.group(1))
-                    progress_callback(min(elapsed / duration, 1.0))
+        total_frames = fps * duration
+        if progress_callback:
+            for line in process.stdout:
+                if not line.startswith('frame='):
+                    continue
+                this_frame = int(line[6:].rstrip())
+                progress_callback(this_frame / total_frames)
 
         process.wait()
 
@@ -193,8 +195,10 @@ class FFmwrapp:
         return frames
 
     def _check_paths(self, ffmpeg_path: Path | None = None):
-        """If were not using default paths, check for given or system paths"""
+        """If we're not using default paths, check for given or system paths"""
         if ffmpeg_path is None and self.ffmpeg.is_file() and self.ffprobe.is_file():
+            log.debug(f'Using deps ffmpeg: {self.ffmpeg}')
+            log.debug(f'Using deps ffprobe: {self.ffprobe}')
             return
 
         if ffmpeg_path is not None:
@@ -203,14 +207,18 @@ class FFmwrapp:
                 ff_test = this_path / FFMPEG_EXE
                 if ff_test.is_file():
                     self.ffmpeg = ff_test
+                    log.debug(f'Using ffmpeg from given dir: {self.ffmpeg}')
                 ff_test = this_path / FFPROBE_EXE
                 if ff_test.is_file():
                     self.ffprobe = ff_test
+                    log.debug(f'Using ffprobe from given dir: {self.ffprobe}')
             elif this_path.is_file():
                 self.ffmpeg = this_path
+                log.debug(f'Using ffmpeg from given path: {self.ffmpeg}')
                 ff_test = this_path.parent / FFPROBE_EXE
                 if ff_test.is_file():
                     self.ffprobe = ff_test
+                    log.debug(f'Using ffprobe from next to given path: {self.ffprobe}')
             else:
                 logging.error(f'Could not make sense of given {ffmpeg_path = }, checking system ...')
 
@@ -218,9 +226,15 @@ class FFmwrapp:
             this_path = shutil.which(FFMPEG_EXE)
             if not this_path:
                 raise FFmpegNotFoundError(_NOT_FOUND_MSG.format(FFMPEG))
+            self.ffmpeg = Path(this_path)
+            log.debug(f'Using ffmpeg found in environment: {self.ffmpeg}')
+
             this_path = shutil.which(FFPROBE_EXE)
             if not this_path:
                 logging.warning(_NOT_FOUND_MSG.format(FFPROBE), '\nUsing backup parser.')
+            else:
+                self.ffprobe = Path(this_path)
+                log.debug(f'Using ffprobe found in environment: {self.ffprobe}')
 
 
 def _duration_str_to_sec(s: str) -> float:
