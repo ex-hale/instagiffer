@@ -24,3 +24,6 @@ instagiffer-event.log
 
 # Test artifacts (downloaded via make test-video)
 test_data/
+
+# temporary stuffs
+_ *
