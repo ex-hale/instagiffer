@@ -21,5 +21,40 @@ Please take part in the process, [**file a 2.x-issue**](https://github.com/ex-ha
   - [ ] **Translated UI** - let's try to incorporate [**weblate**](https://weblate.org) for internationalized texts and documentation (Qt has it's own translation tool. Might also work, let's investigate, but no idea how it fits with community internationalization)
 - [ ] **fresh DX** - let's also try some of these fancy new developer tools like `uv`, `ruff` and `ty` by [astral.sh](https://astral.sh/)
 
+## Dev setup
+
+* get `uv` ([docs](https://github.com/astral-sh/uv#installation))
+  ```
+  # On macOS and Linux.
+  curl -LsSf https://astral.sh/uv/install.sh | sh
+
+  # On Windows.
+  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+  ```
+
+* get the code of this branch directly
+  ```
+  git clone -b 2.x https://github.com/ewerybody/instagiffer
+
+  cd instagiffer
+  ```
+
+* sync the project
+  ```
+  uv sync
+  ```
+
+* check for dependencies
+  ```
+  uv run poe deps
+  ```
+
+* run the main entry file (not much yet)
+  ```
+  uv run instagiffer
+  ```
+
+
+
 
 much more to come ...
