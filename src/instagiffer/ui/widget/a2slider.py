@@ -128,7 +128,7 @@ class A2Slider(QtWidgets.QWidget):
             self.value_ctrl = None
 
     @property
-    def value(self):
+    def value(self) -> int | float:
         """
         Returns the current value of the widget.
         :rtype: float

@@ -1,17 +1,17 @@
-"""Extraction Demo - hands-on test harness for FFmwrapp.extract_frames."""
+"""Extraction Demo - hands-on test harness for FFmWrap.extract_frames."""
 
 from __future__ import annotations
 
 import logging
-import shutil
 import tempfile
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 from PySide6 import QtCore, QtWidgets
 
 import instagiffer.ffmpeg
-from instagiffer.ffmpeg import FFmpegError, FFmpegNotFoundError, FFmwrapp
-from instagiffer.ui.widget import a2slider
+from instagiffer.ffmpeg import FFmpegError, FFmpegNotFoundError, FFmWrap
+from instagiffer.ui.widget import a2slider, timeline
 from instagiffer.ui.widget.path import DirRow, FileRow
 
 logging.basicConfig()
@@ -19,49 +19,18 @@ log = logging.getLogger('ExtractionDemo')
 log.setLevel(logging.DEBUG)
 instagiffer.ffmpeg.log.setLevel(logging.DEBUG)
 
-
-class ExtractionWorker(QtCore.QThread):
-    """Runs frame extraction off the main thread."""
-
-    progress = QtCore.Signal(int)  # 0-100
-    finished = QtCore.Signal(int)  # frame count on success
-    error = QtCore.Signal(str)  # error message on failure
-
-    def __init__(self, ffmpeg_path: Path, video_path: Path, output_dir: Path, start: float, duration: float) -> None:
-        super().__init__()
-        self.ffmpeg_path = ffmpeg_path
-        self.video_path = video_path
-        self.output_dir = output_dir
-        self._start_time = start
-        self._duration = duration
-
-    def run(self) -> None:
-        try:
-            wrapper = FFmwrapp(self.ffmpeg_path)
-            info = wrapper.get_video_info(self.video_path)
-
-            def on_progress(fraction: float) -> None:
-                self.progress.emit(int(fraction * 100))
-
-            frames = wrapper.extract_frames(
-                self.video_path,
-                output_dir=self.output_dir,
-                fps=info.fps,
-                start_time=self._start_time,
-                duration=self._duration,
-                progress_callback=on_progress,
-            )
-            self.finished.emit(len(frames))
-        except Exception as exc:
-            self.error.emit(str(exc))
+MAX_DURATION = 10
 
 
 class ExtractionDemo(QtWidgets.QMainWindow):
     def __init__(self) -> None:
         super().__init__()
+        self._setup_ui()
+        self._detect_defaults()
+
+    def _setup_ui(self):
         self.setWindowTitle('Instagiffer - Extraction Demo')
         self.setMinimumWidth(640)
-        self._worker: ExtractionWorker | None = None
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
@@ -120,6 +89,9 @@ class ExtractionDemo(QtWidgets.QMainWindow):
         self.dur_slider = a2slider.A2Slider(self)
         self.dur_slider.setEnabled(False)
         controls_form.addRow('Duration:', self.dur_slider)
+        self.scale_slider = a2slider.A2Slider(self, value=1.0, mini=0.1, maxi=1.0)
+        self.scale_slider.setEnabled(False)
+        controls_form.addRow('Scale:', self.scale_slider)
 
         self.progress_bar = QtWidgets.QProgressBar()
         self.progress_bar.setRange(0, 100)
@@ -127,22 +99,22 @@ class ExtractionDemo(QtWidgets.QMainWindow):
         self.progress_bar.setTextVisible(True)
         layout.addWidget(self.progress_bar)
 
+        self.timeline = timeline.TimeLine(self)
+        layout.addWidget(self.timeline)
+
         self.status_log = QtWidgets.QPlainTextEdit()
         self.status_log.setReadOnly(True)
         self.status_log.setFixedHeight(120)
         layout.addWidget(self.status_log)
         layout.addStretch()
 
-        # auto-detect defaults
-        self._detect_defaults()
-
     def _detect_defaults(self) -> None:
-        ffmpeg_bin = shutil.which('ffmpeg')
-        if ffmpeg_bin:
-            self.ffmpeg_row.set_path(Path(ffmpeg_bin))
-            self._log(f'Found ffmpeg: {ffmpeg_bin}')
+        wrapper = FFmWrap()
+        if wrapper.ffmpeg.is_file():
+            self._log(f'FFmWrap found executable: {wrapper.ffmpeg}')
+            self.ffmpeg_row.set_path(wrapper.ffmpeg)
         else:
-            self._log('ffmpeg not found in PATH - please set path manually.')
+            self._log('ffmpeg not found! - Please set path manually.')
 
         temp_dir = Path(tempfile.gettempdir()) / 'instagiffer'
         self.temp_row.set_path(temp_dir)
@@ -174,7 +146,7 @@ class ExtractionDemo(QtWidgets.QMainWindow):
             return
 
         try:
-            FFmwrapp(ffmpeg_path)
+            FFmWrap(ffmpeg_path)
         except FFmpegNotFoundError as exc:
             QtWidgets.QMessageBox.critical(self, 'FFmpeg error', str(exc))
             return
@@ -183,16 +155,23 @@ class ExtractionDemo(QtWidgets.QMainWindow):
         self._log(f'Output directory: {output_dir}')
         self._set_busy(True)
 
-        self._worker = ExtractionWorker(
-            ffmpeg_path, video_path, output_dir, self.start_slider.value, self.dur_slider.value
+        worker = ExtractionWorker(
+            self,
+            ffmpeg_path,
+            video_path,
+            output_dir,
+            self.controls['fps'].value(),
+            self.start_slider.value,
+            self.dur_slider.value,
+            self.scale_slider.value,
         )
-        self._worker.progress.connect(self._on_progress)
-        self._worker.finished.connect(self._on_finished)
-        self._worker.error.connect(self._on_error)
-        self._worker.start()
+        worker.progress.connect(self._on_progress)
+        worker.finished.connect(self._on_finished)
+        worker.finished.connect(worker.deleteLater)
+        worker.error.connect(self._on_error)
+        worker.start()
 
     def _on_progress(self, value: int) -> None:
-        print(f'PROGRESS_BAR VALUE: >{value}<')
         self.progress_bar.setValue(value)
 
     def _on_finished(self, frame_count: int) -> None:
@@ -201,43 +180,190 @@ class ExtractionDemo(QtWidgets.QMainWindow):
         self._set_busy(False)
 
     def _on_error(self, message: str) -> None:
+        if not message:
+            return
         self._log(f'ERROR: {message}')
         QtWidgets.QMessageBox.critical(self, 'Extraction failed', message)
         self._set_busy(False)
 
     def _get_video_info(self, path):
         video_path = self.video_row.path
+        enable = True
         if not video_path.is_file():
-            self.extract_btn.setEnabled(False)
+            enable = False
+
+        if enable:
+            try:
+                ffm_wrap = FFmWrap(self.ffmpeg_row.path)
+            except FFmpegNotFoundError as error:
+                self._log(f'ERROR: {error}')
+                enable = False
+
+        if enable:
+            try:
+                nfo = ffm_wrap.get_video_info(video_path)
+            except FFmpegError as error:
+                self._log(f'ERROR: {error}')
+                enable = False
+
+        self.extract_btn.setEnabled(enable)
+        self.start_slider.setEnabled(enable)
+        self.dur_slider.setEnabled(enable)
+        self.scale_slider.setEnabled(enable)
+
+        if not enable:
             return
 
-        try:
-            ffmpg = FFmwrapp(self.ffmpeg_row.path)
-        except FFmpegNotFoundError as error:
-            self._log(f'ERROR: {error}')
-            self.extract_btn.setEnabled(False)
-            return
+        thumb_width, thumb_height, num_thumbs = self.timeline.initial_frames(nfo.width, nfo.height)
+        self.timeline.set_chunk_data(thumb_width, num_thumbs)
+        timestamps = [nfo.duration_sec * i / num_thumbs for i in range(num_thumbs)]
 
-        try:
-            nfo = ffmpg.get_video_info(video_path)
-        except FFmpegError as error:
-            self._log(f'ERROR: {error}')
-            self.extract_btn.setEnabled(False)
-            return
+        self._thumb_thread = QtCore.QThread(self)
+        self._worker = ThumbnailWorker(self.ffmpeg_row.path, self.video_row.path, timestamps, thumb_width, thumb_height)
+        self._worker.moveToThread(self._thumb_thread)
+        self._thumb_thread.started.connect(self._worker.run)
+        self._worker.frame_ready.connect(self._on_thumb_progress)
+        self._worker.finished.connect(self._on_thumb_finished)
+        self._worker.error.connect(self._on_error)
+        self._thumb_thread.start()
 
         self.controls['width'].setValue(nfo.width)
         self.controls['height'].setValue(nfo.height)
         self.controls['duration'].setValue(nfo.duration_sec)
         self.controls['fps'].setValue(nfo.fps)
-
-        self.extract_btn.setEnabled(True)
-        self.start_slider.setEnabled(True)
         self.start_slider.value = 0
         self.start_slider.minmax = (0, nfo.duration_sec)
-        self.dur_slider.setEnabled(True)
-        self.dur_slider.minmax = (0.1, nfo.duration_sec)
+        self.dur_slider.minmax = (0.1, min(nfo.duration_sec, MAX_DURATION))
         self.dur_slider.value = 5
         self._log(str(nfo))
+
+    def _on_thumb_progress(self, index: int, chunk: bytes):
+        print(f'push_chunk {index}')
+        self.timeline.push_chunk(index, chunk)
+        self.timeline.update()
+
+    def _on_thumb_finished(self):
+        self._thumb_thread.quit()
+        self._thumb_thread.deleteLater()
+        self._worker.deleteLater()
+
+
+class ExtractionWorker(QtCore.QThread):
+    """Runs frame extraction off the main thread."""
+
+    progress = QtCore.Signal(int)  # 0-100
+    finished = QtCore.Signal(int)  # frame count on success
+    error = QtCore.Signal(str)  # error message on failure
+
+    def __init__(
+        self,
+        parent,
+        ffmpeg_path: Path,
+        video_path: Path,
+        output_dir: Path,
+        fps: int | float,
+        start: float,
+        duration: float,
+        scale: float,
+    ) -> None:
+        super().__init__(parent)
+        self.ffmpeg_path = ffmpeg_path
+        self.video_path = video_path
+        self.output_dir = output_dir
+        self._fps = fps
+        self._start_time = start
+        self._duration = duration
+        self._scale = scale
+
+    def _progress(self, fraction: float) -> None:
+        self.progress.emit(int(fraction * 100))
+
+    def run(self) -> None:
+        try:
+            wrapper = FFmWrap(self.ffmpeg_path)
+            frames = wrapper.extract_frames(
+                self.video_path,
+                output_dir=self.output_dir,
+                fps=self._fps,
+                start_time=self._start_time,
+                duration=self._duration,
+                scale=self._scale,
+                progress_callback=self._progress,
+            )
+            self.finished.emit(len(frames))
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class ThumbnailWorker(QtCore.QObject):
+    """Runs frame extraction off the main thread."""
+
+    frame_ready = QtCore.Signal(int, bytes)
+    finished = QtCore.Signal()
+    error = QtCore.Signal(str)
+
+    def __init__(self, ffmpeg_path: Path, video_path: Path, timestamps: list[int | float], width: int, height: int):
+        super().__init__()
+        self._video_path = video_path
+        self._timestamps = timestamps
+        self._width = width
+        self._height = height
+        self._wrapper = FFmWrap(ffmpeg_path)
+
+    def run(self):
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pool.submit(self._extract, i, t): i for i, t in enumerate(self._timestamps)}
+            for future in as_completed(futures):
+                i, chunk = future.result()
+                self.frame_ready.emit(i, chunk)
+        self.finished.emit()
+
+    def _extract(self, index: int, timestamp: int | float):
+        # pure Python, no Qt here!
+        chunk = self._wrapper.extract_single_frame(self._video_path, timestamp, self._width, self._height)
+        return index, chunk
+
+
+# class ThumbnailWorker(QtCore.QThread):
+#     """Runs frame extraction off the main thread."""
+
+#     frame_ready = QtCore.Signal(int, bytes)
+#     error = QtCore.Signal(str)
+
+#     def __init__(
+#         self,
+#         parent,
+#         ffmpeg_path: Path,
+#         video_path: Path,
+#         fps: int | float,
+#         start: int | float,
+#         duration: int | float,
+#         width: int,
+#         height: int,
+#     ) -> None:
+#         super().__init__(parent)
+#         self.ffmpeg_path = ffmpeg_path
+#         self.video_path = video_path
+#         self._fps = fps
+#         self._start_time = start
+#         self._duration = duration
+#         self._width = width
+#         self._height = height
+
+#     def run(self) -> None:
+#         try:
+#             wrapper = FFmWrap(self.ffmpeg_path)
+#             wrapper.extract_frame_bytes(
+#                 self.video_path,
+#                 fps=self._fps,
+#                 start_time=self._start_time,
+#                 duration=self._duration,
+#                 width=self._width,
+#                 height=self._height,
+#                 progress_callback=self.frame_ready.emit,
+#             )
+#         except Exception as exc:
+#             self.error.emit(str(exc))
 
 
 if __name__ == '__main__':
