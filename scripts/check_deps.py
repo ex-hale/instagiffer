@@ -31,6 +31,9 @@ def main() -> None:
     if not check_ffmpeg():
         all_good = False
 
+    if not check_qt_deps():
+        all_good = False
+
     if all_good:
         print(f'{CHECK} all dependencies checked!')
 
@@ -39,8 +42,9 @@ def check_ffmpeg() -> bool:
     """Make sure ffmpeg and ffprobe are locally available.
     Sadly all the platforms have their specialties.
     """
+    print('  Checking FFmpeg ...', end='')
     if not ffmpeg_missing():
-        print(f'  {CHECK} Ffmpeg')
+        print(f'\b\b\b{CHECK}  ')
         return True
 
     if IM_A_MAC:
@@ -113,6 +117,25 @@ def _check_ffmpeg_mac() -> None:
         buffer_bytes = read_into_buffer(url)
         with zipfile.ZipFile(buffer_bytes) as zip_object:
             zip_object.extractall(DEPS_DIR)
+
+
+def check_qt_deps() -> bool:
+    print('  Checking Qt dependencies ...', end='')
+    if IM_A_LINUX:
+        import ctypes
+
+        try:
+            ctypes.CDLL('libxcb-cursor.so.0')
+        except OSError:
+            print(
+                f'\b\b\b{EX} \nMissing "libxcb-cursor0"!\n'
+                '  please try installing it and try again:\n'
+                '  sudo apt install libxcb-cursor0'
+            )
+            return False
+
+    print(f'\b\b\b{CHECK}  ')
+    return True
 
 
 class DownloadCB:
