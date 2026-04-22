@@ -49,12 +49,24 @@ Please take part in the process, [**file a 2.x-issue**](https://github.com/ex-ha
   uv run poe deps
   ```
 
+* run the unit test(s) ... wip
+  ```
+  uv run pytest
+  ```
+
 * run the main entry file (not much yet)
   ```
   uv run instagiffer
   ```
 
+* setup your IDE
+  * VS Codium/Code
+    * get the Python extension
+    * turn off Pylance, I recommend to get the `ty` extension instead!
 
+    * there are 2 Debug configurations set up already
+        * **Instagiffer** - runs the main entry script
+        * **Py: Current File** - runs the current file with the set Python interpreter. Make sure it's set to the one in the `.venv`
 
 
 much more to come ...
