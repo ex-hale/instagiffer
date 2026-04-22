@@ -39,7 +39,7 @@ def check_ffmpeg() -> bool:
     """Make sure ffmpeg and ffprobe are locally available.
     Sadly all the platforms have their specialties.
     """
-    if not ffmpeg_mising():
+    if not ffmpeg_missing():
         print(f'  {CHECK} Ffmpeg')
         return True
 
@@ -55,21 +55,21 @@ def check_ffmpeg() -> bool:
         else:
             _check_ffmpeg_win(package_buffer)
 
-    mising = ffmpeg_mising()
-    if not mising:
+    missing = ffmpeg_missing()
+    if not missing:
         print(f'  {CHECK} Ffmpeg Done!')
         return True
-    print(f'  {EX} FFmpreg files missing: {mising}')
+    print(f'  {EX} FFmpeg files missing: {missing}')
     return False
 
 
-def ffmpeg_mising() -> list[str]:
+def ffmpeg_missing() -> list[str]:
     """Get list of missing executable names if any."""
     return [x for x in FF_EXES if not (DEPS_DIR / x).is_file()]
 
 
 def _check_ffmpeg_linux(io_object: io.BytesIO) -> None:
-    """Open linux specific tar.xz-buffer and extract our exectuables from `bin`."""
+    """Open linux specific tar.xz-buffer and extract our executables from `bin`."""
     import tarfile
 
     with tarfile.open(fileobj=io_object, mode='r:xz') as tar_object:
