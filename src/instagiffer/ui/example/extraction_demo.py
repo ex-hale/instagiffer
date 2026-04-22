@@ -1,6 +1,7 @@
 """Extraction Demo - hands-on test harness for FFmWrap.extract_frames."""
 
 from __future__ import annotations
+import time
 
 import logging
 import tempfile
@@ -226,6 +227,7 @@ class ExtractionDemo(QtWidgets.QMainWindow):
         self._worker.finished.connect(self._on_thumb_finished)
         self._worker.error.connect(self._on_error)
         self._thumb_thread.start()
+        self._thumb_t0 = time.perf_counter()
 
         self.controls['width'].setValue(nfo.width)
         self.controls['height'].setValue(nfo.height)
@@ -246,6 +248,7 @@ class ExtractionDemo(QtWidgets.QMainWindow):
         self._thumb_thread.quit()
         self._thumb_thread.deleteLater()
         self._worker.deleteLater()
+        print(f'thumbs took: {time.perf_counter() - self._thumb_t0:.2f}s')
 
 
 class ExtractionWorker(QtCore.QThread):
