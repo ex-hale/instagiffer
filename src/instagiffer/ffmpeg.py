@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import shutil
 import subprocess
 from collections.abc import Callable
@@ -25,6 +24,7 @@ FFPROBE = 'ffprobe'
 FFMPEG_EXE = f'{FFMPEG}{_EXT}'
 FFPROBE_EXE = f'{FFPROBE}{_EXT}'
 EXECUTABLES = FFMPEG_EXE, FFPROBE_EXE
+EINVAL = 4294967274
 _NOT_FOUND_MSG = (
     '{} not found in environment PATH!\n'
     'Use `uv run poe deps` to get the executables locally or\n'
@@ -55,14 +55,14 @@ class VideoInfo:
             yield attr, getattr(self, attr)
 
 
-class FFmwrapp:
+class FFmWrap:
     """
     Thin wrapper around the `ffmpeg` executable.
 
     Usage::
 
-        ffmpeg = FFmwrapp()                         # auto-locate in PATH
-        ffmpeg = FFmwrapp(Path('/usr/bin/ffmpeg'))  # explicit path
+        ffmpeg = FFmWrap()                         # auto-locate in PATH
+        ffmpeg = FFmWrap(Path('/usr/bin/ffmpeg'))  # explicit path
 
         info = ffmpeg.get_video_info(Path('clip.mp4'))
         frames = ffmpeg.extract_frames(
@@ -78,7 +78,7 @@ class FFmwrapp:
     def __init__(self, ffmpeg_path: Path | None = None) -> None:
         self.ffmpeg: Path = DEPS_DIR / FFMPEG_EXE
         self.ffprobe: Path = DEPS_DIR / FFPROBE_EXE
-        self._check_paths(ffmpeg_path)
+        self._check_ff_paths(ffmpeg_path)
 
     def get_video_info(self, video_path: Path) -> VideoInfo:
         """
@@ -121,11 +121,12 @@ class FFmwrapp:
 
     def extract_frames(
         self,
-        video_path: Path,
-        output_dir: Path,
+        video_path: str | Path,
+        output_dir: str | Path,
         fps: float,
         start_time: float = 0.0,
         duration: float = 5.0,
+        scale: float = 1.0,
         progress_callback: Callable[[float], None] | None = None,
     ) -> list[Path]:
         """
@@ -146,26 +147,20 @@ class FFmwrapp:
             FileNotFoundError: If *video_path* does not exist.
             FFmpegError:       If ffmpeg exits non-zero or no frames are produced.
         """
-        video_path = Path(video_path)
-        if not video_path.is_file():
-            raise FileNotFoundError(f'Video not found: {video_path}')
+        video_path, output_dir = self._check_paths(video_path, output_dir)
 
-        output_dir = Path(output_dir)
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # -stats: emit progress lines to stderr
         cmd: list[str] = [str(self.ffmpeg), '-v', 'quiet', '-stats', '-progress', 'pipe:1']
-
         # -ss before -i: fast keyframe seek (accurate enough for GIF use)
         if start_time > 0:
             cmd += ['-ss', f'{start_time:.3f}']
         cmd += ['-t', f'{duration:.3f}']
         cmd += ['-i', str(video_path)]
+        if scale != 1.0:
+            cmd += ['-vf', f'scale=iw*{scale}:-2']
         # -sn: skip subtitle streams
         cmd += ['-r', str(fps), '-sn']
         cmd += [str(output_dir / FRAME_PATTERN)]
-
-        log.debug('extract_frames cmd: %s', ' '.join(cmd))
+        log.debug('extract_frames cmd: %s', subprocess.list2cmdline(cmd))
 
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         assert process.stdout is not None
@@ -181,7 +176,10 @@ class FFmwrapp:
         process.wait()
 
         if process.returncode != 0:
-            raise FFmpegError(f'ffmpeg exited with code {process.returncode}. Command: {" ".join(cmd)}')
+            error_code = f'{process.returncode}'
+            if process.returncode == EINVAL:
+                error_code += ' Invalid Argument'
+            raise FFmpegError(f'ffmpeg exited with code {error_code}.\n Command: {subprocess.list2cmdline(cmd)}')
 
         frames = sorted(output_dir.glob(FRAME_GLOB))
         if not frames:
@@ -194,7 +192,87 @@ class FFmwrapp:
 
         return frames
 
-    def _check_paths(self, ffmpeg_path: Path | None = None):
+    def extract_frame_bytes(
+        self,
+        video_path: Path,
+        fps: int | float,
+        start_time: int | float,
+        duration: int | float,
+        width: int,
+        height: int,
+        progress_callback: Callable[[int, bytes], None],
+    ):
+        """
+        Call ffmpeg to stream chunks of bytes through
+        """
+        video_path, _ = self._check_paths(video_path)
+
+        # cmd: list[str] = [str(self.ffmpeg), '-v', 'quiet', '-stats', '-progress', 'pipe:2']
+        cmd: list[str] = [str(self.ffmpeg), '-v', 'quiet']
+        # -ss before -i: fast keyframe seek (accurate enough for GIF use)
+        # if start_time > 0:
+        cmd += ['-ss', f'{start_time:.3f}']
+        cmd += ['-i', str(video_path)]
+        cmd += ['-t', f'{duration:.3f}']
+        cmd += ['-vf', f'scale={width}:{height}']
+        # -sn: skip subtitle streams
+        cmd += ['-r', str(fps), '-sn']
+        cmd += ['-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1']
+        log.debug('extract_frame_bytes cmd: %s', subprocess.list2cmdline(cmd))
+
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        assert proc.stdout is not None and proc.stderr is not None
+
+        index = 0
+        frame_bytes = width * height * 3  # rgb24
+        while chunk := proc.stdout.read(frame_bytes):
+            progress_callback(index, chunk)
+            index += 1
+        errors = proc.stderr.read()
+        if errors:
+            print(f'errors: {errors}')
+
+    def extract_single_frame(
+        self,
+        video_path: Path,
+        timestamp: float,
+        width: int,
+        height: int,
+    ) -> bytes | None:
+        video_path, _ = self._check_paths(video_path)
+
+        cmd: list[str] = [str(self.ffmpeg), '-v', 'quiet']
+        cmd += ['-ss', f'{timestamp:.3f}']
+        cmd += ['-i', str(video_path)]
+        cmd += ['-frames:v', '1']
+        cmd += ['-vf', f'scale={width}:{height}']
+        cmd += ['-sn', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1']
+        # log.debug('extract_single_frame cmd: %s', subprocess.list2cmdline(cmd))
+
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        assert proc.stdout is not None and proc.stderr is not None
+
+        frame_bytes = width * height * 3
+        chunk = proc.stdout.read(frame_bytes)
+        errors = proc.stderr.read()
+        if errors:
+            log.debug('extract_single_frame stderr: %s', errors.decode(errors='replace'))
+
+        return chunk if len(chunk) == frame_bytes else None
+
+    def _check_paths(self, video_path: str | Path, output_dir: str | Path | None = None) -> tuple[Path, Path]:
+        video_path = Path(video_path)
+        if not video_path.is_file():
+            raise FileNotFoundError(f'Video not found: {video_path}')
+
+        if output_dir is not None:
+            output_dir = Path(output_dir)
+            output_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            output_dir = Path()
+        return video_path, output_dir
+
+    def _check_ff_paths(self, ffmpeg_path: Path | None = None):
         """If we're not using default paths, check for given or system paths"""
         if ffmpeg_path is None and self.ffmpeg.is_file() and self.ffprobe.is_file():
             log.debug(f'Using deps ffmpeg: {self.ffmpeg}')
