@@ -8,6 +8,7 @@ class TimeLine(QtWidgets.QWidget):
         super().__init__(parent)
         self.setFixedHeight(height)
         self._chunks = {}
+        self._num_chunks = 0
 
     def initial_frames(self, original_width: int, original_height: int) -> tuple[int, int, int]:
         """Given the width and height of source footage return number of
@@ -30,6 +31,8 @@ class TimeLine(QtWidgets.QWidget):
         self._chunks[index] = QtGui.QPixmap.fromImage(img)
 
     def paintEvent(self, event):
+        if not self._num_chunks:
+            return
         w = self.width() / self._num_chunks
         with QtGui.QPainter(self) as painter:
             for i, chunk in self._chunks.items():
