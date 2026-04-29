@@ -12,15 +12,17 @@ TEST_DATA = THIS_DIR / 'data'
 SCRIPTS_DIR = THIS_DIR.parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.append(str(SCRIPTS_DIR))
+
 import check_deps  # noqa: E402
+
+import instagiffer.common
+
+DEPS_ROOT = instagiffer.common.DEPS_ROOT
 
 
 def test_linux():
     name = 'linux'
-    backup_platform = sys.platform
-    sys.platform = name
-    reload(check_deps)
-    sys.platform = backup_platform
+    _reload_with(name)
 
     assert check_deps.IM_A_LINUX
     assert not check_deps.IM_A_MAC
@@ -76,12 +78,13 @@ def test_mac():
 def _reload_with(name: str):
     backup_platform = sys.platform
     sys.platform = name  # ty:ignore[invalid-assignment]
+    reload(instagiffer.common)
     reload(check_deps)
     sys.platform = backup_platform
 
 
 def _package_check(name: str):
-    backup_deps = check_deps._DEPS_PATH / f'_{name}_backup'
+    backup_deps = DEPS_ROOT / f'_{name}_backup'
     if backup_deps.is_dir():
         shutil.rmtree(backup_deps)
     if check_deps.DEPS_DIR.is_dir():
@@ -92,7 +95,7 @@ def _package_check(name: str):
     check_deps.main()
 
     assert check_deps.DEPS_DIR.is_dir()
-    missing = check_deps.ffmpeg_mising()
+    missing = check_deps.ffmpeg_missing()
     assert not missing
     for name in check_deps.FF_EXES:
         assert not os.path.getsize(check_deps.DEPS_DIR / name)
