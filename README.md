@@ -19,11 +19,11 @@ Please take part in the process, [**file a 2.x-issue**](https://github.com/ex-ha
   - [ ] **Themes** - dark/light mode is nothing new anymore but that will come almost out of the box with Qt. And much more. Might be we spin up a retro Tk-flavor theme to remember the good times.
   - [ ] **built-in packaging** Qt for Python comes with [pyside6-deploy](https://doc.qt.io/qtforpython-6/deployment/deployment-pyside6-deploy.html#pyside6-deploy) we might replace some of our build tooling and get fast and solid packages for all platforms ([including Android?](https://doc.qt.io/qtforpython-6/deployment/deployment-pyside6-android-deploy.html))
   - [ ] **Translated UI** - let's try to incorporate [**weblate**](https://weblate.org) for internationalized texts and documentation (Qt has it's own translation tool. Might also work, let's investigate, but no idea how it fits with community internationalization)
-- [ ] **fresh DX** - let's also try some of these fancy new developer tools like `uv`, `ruff` and `ty` by [astral.sh](https://astral.sh/)
+- [ ] **fresh DX** - let's also try some of these fancy new developer tools like [`uv`](https://docs.astral.sh/uv/), [`ruff`](https://docs.astral.sh/ruff/) and [`ty`](https://docs.astral.sh/ruff/) by [astral.sh](https://astral.sh/)
 
 ## Dev setup
 
-* get `uv` ([docs](https://github.com/astral-sh/uv#installation))
+* get `uv` ([docs](https://docs.astral.sh/uv/getting-started/installation/))
   ```
   # On macOS and Linux.
   curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -61,8 +61,8 @@ Please take part in the process, [**file a 2.x-issue**](https://github.com/ex-ha
 
 * setup your IDE
   * VS Codium/Code
-    * get the Python extension
-    * turn off Pylance, I recommend to get the `ty` extension instead!
+    * get/activate **Python** extension
+    * **turn off** Pylance, I recommend to get [`ty`](https://open-vsx.org/extension/astral-sh/ty) instead!
 
     * there are 2 Debug configurations set up already
         * **Instagiffer** - runs the main entry script
