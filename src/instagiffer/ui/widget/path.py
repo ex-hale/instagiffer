@@ -1,4 +1,4 @@
-"""Path-picker row widgets."""
+"""Path-picker widgets."""
 
 from __future__ import annotations
 
