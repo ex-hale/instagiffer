@@ -1,10 +1,10 @@
 """Extraction Demo - hands-on test harness for FFmWrap.extract_frames."""
 
 from __future__ import annotations
-import time
 
 import logging
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -219,7 +219,7 @@ class ExtractionDemo(QtWidgets.QMainWindow):
         self.timeline.set_chunk_data(thumb_width, num_thumbs)
         timestamps = [nfo.duration_sec * i / num_thumbs for i in range(num_thumbs)]
 
-        self._thumb_thread = QtCore.QThread(self)
+        self._thumb_thread = QtCore.QThread(self, objectName='thumb_thread')
         self._worker = ThumbnailWorker(self.ffmpeg_row.path, self.video_row.path, timestamps, thumb_width, thumb_height)
         self._worker.moveToThread(self._thumb_thread)
         self._thumb_thread.started.connect(self._worker.run)
@@ -242,7 +242,6 @@ class ExtractionDemo(QtWidgets.QMainWindow):
     def _on_thumb_progress(self, index: int, chunk: bytes):
         print(f'push_chunk {index}')
         self.timeline.push_chunk(index, chunk)
-        self.timeline.update()
 
     def _on_thumb_finished(self):
         self._thumb_thread.quit()
@@ -322,7 +321,6 @@ class ThumbnailWorker(QtCore.QObject):
         self.finished.emit()
 
     def _extract(self, index: int, timestamp: int | float):
-        # pure Python, no Qt here!
         chunk = self._wrapper.extract_single_frame(self._video_path, timestamp, self._width, self._height)
         return index, chunk
 
