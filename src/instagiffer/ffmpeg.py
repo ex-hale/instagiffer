@@ -260,6 +260,63 @@ class FFmWrap:
 
         return chunk if len(chunk) == frame_bytes else None
 
+    def encode_mp4(
+        self,
+        frames: list,
+        width: int,
+        height: int,
+        fps: float,
+        path: Path,
+    ) -> Path:
+        """Encode a sequence of PIL Images to an H.264 MP4 suitable for all modern browsers.
+
+        Frames are piped as raw RGB24 bytes. "yuv420p" pixel format and +faststart
+        (moov atom at front) are required for in-browser playback without buffering.
+        Both dimensions are rounded down to the nearest even number as "yuv420p" requires it.
+        """
+        path = Path(path).with_suffix('.mp4')
+        path.parent.mkdir(parents=True, exist_ok=True)
+
+        # yuv420p requires even dimensions
+        w = width if width % 2 == 0 else width - 1
+        h = height if height % 2 == 0 else height - 1
+
+        # fmt: off
+        cmd = [
+            self.ffmpeg, '-v', 'quiet',
+            '-f', 'rawvideo', '-pix_fmt', 'rgb24',
+            '-s', f'{w}x{h}',
+            '-r', str(fps),
+            '-i', 'pipe:0',
+            '-c:v', 'libx264',
+            '-pix_fmt', 'yuv420p',
+            '-preset', 'fast',
+            '-movflags', '+faststart',
+            '-y', path,
+        ]
+        # fmt: on
+        log.debug('encode_mp4 cmd: %s', subprocess.list2cmdline(cmd))
+
+        # Build all raw bytes before opening the process; communicate() then writes
+        # stdin and drains stderr in threads, avoiding pipe-buffer deadlocks.
+        def _to_bytes(frame) -> bytes:
+            if frame.size != (w, h):
+                from PIL import Image
+
+                frame = frame.resize((w, h), Image.Resampling.LANCZOS)
+            return frame.convert('RGB').tobytes()
+
+        raw = b''.join(_to_bytes(f) for f in frames)
+
+        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+        _, err = proc.communicate(input=raw)
+
+        if proc.returncode != 0:
+            raise FFmpegError(f'MP4 encoding failed (exit {proc.returncode}):\n{err.decode(errors="replace")}')
+
+        log.info('Encoded %d frames to "%s"', len(frames), path.name)
+        return path
+
     def _check_paths(self, video_path: str | Path, output_dir: str | Path | None = None) -> tuple[Path, Path]:
         video_path = Path(video_path)
         if not video_path.is_file():
