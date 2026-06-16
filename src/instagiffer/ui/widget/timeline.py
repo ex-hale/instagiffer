@@ -23,12 +23,10 @@ class TimeLine(QtWidgets.QWidget):
         self._chunks_width = width
 
     def push_chunk(self, index: int, chunk: bytes):
-        # if not len(self._chunks) == index:
-        #     print(f'{len(self._chunks) = } / {index = }')
         w = self._chunks_width
-        h = self.height()
-        img = QtGui.QImage(chunk, w, h, w * 3, QtGui.QImage.Format.Format_RGB888)
+        img = QtGui.QImage(chunk, w, self.height(), w * 3, QtGui.QImage.Format.Format_RGB888)
         self._chunks[index] = QtGui.QPixmap.fromImage(img)
+        self.update()
 
     def paintEvent(self, event):
         if not self._num_chunks:
