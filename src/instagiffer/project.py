@@ -41,6 +41,13 @@ class IGOutput:
     format: str = 'gif'
 
 
+class Fit(Enum):
+    crop = 'crop'
+    """Scale to fill, crop excess — never distorts, may lose edges."""
+    contain = 'contain'
+    """Scale to fit, pad with black bars — never crops, may add bars."""
+
+
 @dataclass
 class SourceLayer:
     """Video or image source. trim, crop, speed etc. will live here later."""
@@ -50,6 +57,7 @@ class SourceLayer:
     start_time: float = 0.0
     duration: float = 5.0
     scale: float = 1.0
+    fit: Fit = Fit.crop
 
     @property
     def is_remote(self) -> bool:
@@ -95,7 +103,7 @@ class SourceLayer:
         for p in sorted(self.frames_dir().glob('image*.png')):
             img = Image.open(p).convert('RGB')
             if img.size != size:
-                img = img.resize(size, Image.Resampling.LANCZOS)
+                img = _fit_frame(img, size, self.fit)
             frames.append(img)
         return frames
 
@@ -182,6 +190,23 @@ class TextLayer:
 type Layer = SourceLayer | TextLayer
 
 
+def _fit_frame(img: Image.Image, size: tuple[int, int], fit: Fit) -> Image.Image:
+    tw, th = size
+    sw, sh = img.size
+    if fit == Fit.crop:
+        scale = max(tw / sw, th / sh)
+        img = img.resize((round(sw * scale), round(sh * scale)), Image.Resampling.LANCZOS)
+        left = (img.width - tw) // 2
+        top = (img.height - th) // 2
+        return img.crop((left, top, left + tw, top + th))
+    # Fit.contain: scale to fit, pad remainder with black
+    scale = min(tw / sw, th / sh)
+    img = img.resize((round(sw * scale), round(sh * scale)), Image.Resampling.LANCZOS)
+    result = Image.new('RGB', size, (0, 0, 0))
+    result.paste(img, ((tw - img.width) // 2, (th - img.height) // 2))
+    return result
+
+
 class Encoder(Protocol):
     def save(self, frames: list[Image.Image], output: IGOutput, path: Path) -> Path: ...
 
@@ -219,6 +244,7 @@ def _layer_to_dict(layer: Layer) -> dict:
         d['align_vertical'] = layer.align_vertical.value
         d['type'] = 'text'
     else:
+        d['fit'] = layer.fit.value
         d['type'] = 'source'
     return d
 
@@ -227,6 +253,7 @@ def _layer_from_dict(d: dict) -> Layer:
     d = d.copy()
     layer_type = d.pop('type')
     if layer_type == 'source':
+        d['fit'] = Fit(d['fit'])
         return SourceLayer(**d)
     if layer_type == 'text':
         d['align_horizontal'] = HAlign(d['align_horizontal'])
