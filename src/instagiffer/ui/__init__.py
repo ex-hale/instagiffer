@@ -2,7 +2,7 @@ from PySide6 import QtCore, QtGui, QtWidgets
 
 import instagiffer
 import instagiffer.common
-from instagiffer.config import Config, UiSettings
+# from instagiffer.config import Config, UiSettings
 from instagiffer.ui.widget.stack import IgfStack
 from instagiffer.ui.widget.timeline import TimeLine
 from instagiffer.ui.widget.view import IgfView
@@ -34,8 +34,8 @@ class InstagifferUI(QtWidgets.QMainWindow):
 
     def _restore_ui(self):
         """WIP - Restore window position and size or initialize these if unset."""
-        if not hasattr(UiSettings, 'splitter_size'):
-            self._init_window_geometry()
+        # if not hasattr(UiSettings, 'splitter_size'):
+        #     self._init_window_geometry()
 
     def _init_window_geometry(self):
         geometry = self.geometry()
