@@ -1,29 +1,33 @@
 {
-    "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Instagiffer",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/src/instagiffer/__init__.py",
-            "args": [
-                "--debug"
-            ],
-            "windows": {
-                "python": "${workspaceFolder}/.venv/Scripts/python.exe"
-            },
-            "osx": {
-                "python": "${workspaceFolder}/.venv/bin/python3"
-            },
-            "cwd": "${workspaceFolder}",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "Py: Current File",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal"
-        }
-    ]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Instagiffer",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/instagiffer/__init__.py",
+      "args": ["--debug"],
+      "windows": {
+        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python3"
+      },
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Py: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "windows": {
+        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
+      },
+      "osx": {
+        "python": "${workspaceFolder}/.venv/bin/python3"
+      }
+    }
+  ]
 }
