@@ -1,4 +1,5 @@
 from __future__ import annotations
+import stat
 
 import io
 import urllib.request
@@ -68,8 +69,17 @@ def check_ffmpeg() -> bool:
 
 
 def ffmpeg_missing() -> list[str]:
-    """Get list of missing executable names if any."""
-    return [x for x in FF_EXES if not (DEPS_DIR / x).is_file()]
+    """Get list of missing executable names if any.
+    Make sure they're executable if not missing.
+    """
+    missing: list[str] = []
+    for x in FF_EXES:
+        this = DEPS_DIR / x
+        if not this.is_file():
+            missing.append(x)
+        elif IM_A_LINUX or IM_A_MAC:
+            this.chmod(this.stat().st_mode | stat.S_IEXEC)
+    return missing
 
 
 def _check_ffmpeg_linux(io_object: io.BytesIO) -> None:
