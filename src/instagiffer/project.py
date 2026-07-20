@@ -13,177 +13,10 @@ from typing import Protocol
 from PIL import Image, ImageDraw, ImageFont
 
 from instagiffer.common import DOWNLOADS_DIR, FRAMES_CACHE_DIR, PROJECTS_DIR
+import instagiffer.layer
 from instagiffer.compat import uuid7
 from instagiffer.ffmpeg import FFmWrap
-
-
-
-
-
-class Fit(Enum):
-    crop = 'crop'
-    """Scale to fill, crop excess — never distorts, may lose edges."""
-    contain = 'contain'
-    """Scale to fit, pad with black bars — never crops, may add bars."""
-
-
-@dataclass
-class SourceLayer:
-    """Video or image source. trim, crop, speed etc. will live here later."""
-
-    path: str = ''
-    fps: float = 10.0
-    start_time: float = 0.0
-    duration: float = 5.0
-    scale: float = 1.0
-    fit: Fit = Fit.crop
-
-    @property
-    def is_remote(self) -> bool:
-        return self.path.startswith(('http://', 'https://'))
-
-    def frames_cache_key(self) -> str:
-        key = f'{self.path}|{self.fps}|{self.start_time}|{self.duration}|{self.scale}'
-        return hashlib.sha256(key.encode()).hexdigest()[:16]
-
-    def frames_dir(self) -> Path:
-        return FRAMES_CACHE_DIR / self.frames_cache_key()
-
-    def local_source_path(self) -> Path:
-        """Local path to the source file. Remote sources are expected to be downloaded here first."""
-        if self.is_remote:
-            url_hash = hashlib.sha256(self.path.encode()).hexdigest()[:16]
-            stem = self.path.rstrip('/').rsplit('/', 1)[-1] or 'source'
-            return DOWNLOADS_DIR / url_hash / stem
-        return Path(self.path)
-
-    def frames_are_cached(self) -> bool:
-        d = self.frames_dir()
-        return d.is_dir() and any(d.glob('image*.png'))
-
-    def get_frames(
-        self,
-        output: IGOutput,
-        ffmpeg: FFmWrap | None = None,
-        progress_callback: Callable[[float], None] | None = None,
-    ) -> list[Image.Image]:
-        if not self.frames_are_cached():
-            (ffmpeg or FFmWrap()).extract_frames(
-                self.local_source_path(),
-                self.frames_dir(),
-                fps=self.fps,
-                start_time=self.start_time,
-                duration=self.duration,
-                scale=self.scale,
-                progress_callback=progress_callback,
-            )
-        size = (output.width, output.height)
-        frames = []
-        for p in sorted(self.frames_dir().glob('image*.png')):
-            img = Image.open(p).convert('RGB')
-            if img.size != size:
-                img = _fit_frame(img, size, self.fit)
-            frames.append(img)
-        return frames
-
-
-class HAlign(Enum):
-    none = 'none'
-    left = 'left'
-    right = 'right'
-    center = 'center'
-
-
-class VAlign(Enum):
-    none = 'none'
-    top = 'top'
-    bottom = 'bottom'
-    center = 'center'
-
-
-@dataclass
-class TextLayer:
-    """Overlay text. timing, animation etc. later."""
-
-    text: str = ''
-    font: str = ''
-    size: int = 24
-    color: str = '#ffffff'
-    outline_color: str = '#000000'
-    outline_size: int = 2
-    position: tuple[int, int] = (0, 0)
-    align_horizontal: HAlign = HAlign.center
-    align_vertical: VAlign = VAlign.bottom
-    margins: tuple[int, int, int, int] = (20, 20, 20, 20)
-
-    def draw(self, frame: Image.Image) -> Image.Image:
-        if not self.text:
-            return frame
-
-        frame = frame.copy()
-        d = ImageDraw.Draw(frame)
-
-        font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
-        if self.font:
-            try:
-                font = ImageFont.truetype(self.font, self.size)
-            except OSError:
-                pass
-        if font is None:
-            try:
-                font = ImageFont.load_default(size=self.size)
-            except TypeError:
-                font = ImageFont.load_default()
-
-        stroke = self.outline_size if self.outline_color else 0
-        bbox = d.textbbox((0, 0), self.text, font=font, stroke_width=stroke)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        w, h = frame.size
-        ml, mt, mr, mb = self.margins
-
-        if self.align_horizontal == HAlign.left:
-            x = ml
-        elif self.align_horizontal == HAlign.right:
-            x = w - tw - mr
-        elif self.align_horizontal == HAlign.center:
-            x = (w - tw) // 2
-        else:
-            x = self.position[0]
-
-        if self.align_vertical == VAlign.top:
-            y = mt
-        elif self.align_vertical == VAlign.bottom:
-            y = h - th - mb
-        elif self.align_vertical == VAlign.center:
-            y = (h - th) // 2
-        else:
-            y = self.position[1]
-
-        d.text(
-            (x, y), self.text, font=font, fill=self.color,
-            stroke_width=stroke, stroke_fill=self.outline_color or None,
-        )
-        return frame
-
-
-type Layer = SourceLayer | TextLayer
-
-
-def _fit_frame(img: Image.Image, size: tuple[int, int], fit: Fit) -> Image.Image:
-    tw, th = size
-    sw, sh = img.size
-    if fit == Fit.crop:
-        scale = max(tw / sw, th / sh)
-        img = img.resize((round(sw * scale), round(sh * scale)), Image.Resampling.LANCZOS)
-        left = (img.width - tw) // 2
-        top = (img.height - th) // 2
-        return img.crop((left, top, left + tw, top + th))
-    # Fit.contain: scale to fit, pad remainder with black
-    scale = min(tw / sw, th / sh)
-    img = img.resize((round(sw * scale), round(sh * scale)), Image.Resampling.LANCZOS)
-    result = Image.new('RGB', size, (0, 0, 0))
-    result.paste(img, ((tw - img.width) // 2, (th - img.height) // 2))
-    return result
+from instagiffer.layer import Layer, SourceLayer, TextLayer
 from instagiffer.output import IGOutput
 
 
@@ -217,33 +50,6 @@ class FfmpegMp4Encoder:
         return self._ff.encode_mp4(frames, output.width, output.height, output.fps, path)
 
 
-def _layer_to_dict(layer: Layer) -> dict:
-    d = asdict(layer)
-    if isinstance(layer, TextLayer):
-        d['align_horizontal'] = layer.align_horizontal.value
-        d['align_vertical'] = layer.align_vertical.value
-        d['type'] = 'text'
-    else:
-        d['fit'] = layer.fit.value
-        d['type'] = 'source'
-    return d
-
-
-def _layer_from_dict(d: dict) -> Layer:
-    d = d.copy()
-    layer_type = d.pop('type')
-    if layer_type == 'source':
-        d['fit'] = Fit(d['fit'])
-        return SourceLayer(**d)
-    if layer_type == 'text':
-        d['align_horizontal'] = HAlign(d['align_horizontal'])
-        d['align_vertical'] = VAlign(d['align_vertical'])
-        d['position'] = tuple(d['position'])
-        d['margins'] = tuple(d['margins'])
-        return TextLayer(**d)
-    raise ValueError(f'Unknown layer type: {layer_type!r}')
-
-
 class IGProject:
     def __init__(self, project_id: str):
         if not isinstance(project_id, str):
@@ -271,7 +77,7 @@ class IGProject:
         with open(project_file, encoding='utf-8') as f:
             data = json.load(f)
         project.output = IGOutput(**data['output'])
-        project.layers = [_layer_from_dict(layer) for layer in data['layers']]
+        project.layers = instagiffer.layer.from_dicts(data['layers'])
         return project
 
     def save(self):
@@ -280,7 +86,7 @@ class IGProject:
         data = {
             'project_id': self.project_id,
             'output': asdict(self.output),
-            'layers': [_layer_to_dict(layer) for layer in self.layers],
+            'layers': instagiffer.layer.to_dicts(self.layers),
         }
         with open(self.project_dir / 'project.json', 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
@@ -308,7 +114,7 @@ class IGProject:
         for layer in self.layers:
             if isinstance(layer, SourceLayer):
                 frames = layer.get_frames(self.output, ffmpeg=ffmpeg, progress_callback=progress_callback)
-                break
+
         for layer in self.layers:
             if isinstance(layer, TextLayer):
                 frames = [layer.draw(f) for f in frames]
