@@ -18,15 +18,6 @@ from instagiffer.ffmpeg import FFmWrap
 
 
 
-@dataclass
-class IGOutput:
-    width: int = 480
-    height: int = 360
-    fps: float = 10.0
-    colors: int = 256
-    optimize: bool = True
-    loop: int = 0
-    format: str = 'gif'
 
 
 class Fit(Enum):
@@ -193,6 +184,7 @@ def _fit_frame(img: Image.Image, size: tuple[int, int], fit: Fit) -> Image.Image
     result = Image.new('RGB', size, (0, 0, 0))
     result.paste(img, ((tw - img.width) // 2, (th - img.height) // 2))
     return result
+from instagiffer.output import IGOutput
 
 
 class Encoder(Protocol):
