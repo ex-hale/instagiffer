@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import hashlib
 import json
-import sys
-import uuid
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
-from enum import Enum
+from dataclasses import asdict
 from pathlib import Path
 from typing import Protocol
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image
 
-from instagiffer.common import DOWNLOADS_DIR, FRAMES_CACHE_DIR, PROJECTS_DIR
 import instagiffer.layer
+from instagiffer.common import PROJECTS_DIR
 from instagiffer.compat import uuid7
 from instagiffer.ffmpeg import FFmWrap
 from instagiffer.layer import Layer, SourceLayer, TextLayer
@@ -137,13 +133,14 @@ class IGProject:
 if __name__ == '__main__':
     from instagiffer.common import PROJECT_ROOT
 
+    # test
     src: Path = PROJECT_ROOT / 'test' / 'data' / '288c39d6521eb8f1.mp4'
     out: Path = PROJECT_ROOT / 'test' / 'data' / 'out.gif'
 
     p: IGProject = IGProject.new()
     p.output = IGOutput(width=480, height=270, fps=10.0)
     p.add_source(str(src), fps=10.0, start_time=0.0, duration=3.0)
-    p.add_text('Hello World', color='#ffff00', size=32)
+    p.add_text('Hell, World!', color='#ff8080', size=48, font='comic', outline_size=10)
     p.save()
 
     result = p.render(out, progress_callback=lambda pct: print(f'\r{pct:.0%}', end='', flush=True))

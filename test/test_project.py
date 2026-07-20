@@ -1,16 +1,9 @@
 import pytest
 from PIL import Image
 
-from instagiffer.project import (
-    Fit,
-    HAlign,
-    IGOutput,
-    IGProject,
-    SourceLayer,
-    TextLayer,
-    VAlign,
-    _fit_frame,
-)
+from instagiffer.layer import source, text
+from instagiffer.output import IGOutput
+from instagiffer.project import IGProject
 
 
 @pytest.fixture
@@ -23,7 +16,14 @@ def project(tmp_path, monkeypatch):
     p = IGProject.new()
     p.output = IGOutput(width=320, height=240, fps=12.0, colors=128, loop=1, format='mp4')
 
-    p.add_source('/some/local/clip.mp4', fps=12.0, start_time=1.5, duration=4.0, scale=0.5, fit=Fit.contain)
+    p.add_source(
+        '/some/local/clip.mp4',
+        fps=12.0,
+        start_time=1.5,
+        duration=4.0,
+        scale=0.5,
+        fit=source.Fit.contain,
+    )
     p.add_text(
         'Test caption',
         font='Arial.ttf',
@@ -32,8 +32,8 @@ def project(tmp_path, monkeypatch):
         outline_color='#0000ff',
         outline_size=3,
         position=(10, 20),
-        align_horizontal=HAlign.right,
-        align_vertical=VAlign.top,
+        align_horizontal=text.HAlign.right,
+        align_vertical=text.VAlign.top,
         margins=(5, 10, 15, 20),
     )
     return p
@@ -68,7 +68,7 @@ def test_roundtrip_source_layer(project):
 
     orig = project.layers[0]
     back = loaded.layers[0]
-    assert isinstance(back, SourceLayer)
+    assert isinstance(back, source.SourceLayer)
     assert back.path == orig.path
     assert back.fps == orig.fps
     assert back.start_time == orig.start_time
@@ -83,7 +83,7 @@ def test_roundtrip_text_layer(project):
 
     orig = project.layers[1]
     back = loaded.layers[1]
-    assert isinstance(back, TextLayer)
+    assert isinstance(back, text.TextLayer)
     assert back.text == orig.text
     assert back.font == orig.font
     assert back.size == orig.size
@@ -112,14 +112,14 @@ def _solid(w: int, h: int, color: tuple[int, int, int] = (200, 100, 50)) -> Imag
 def test_fit_crop_output_size():
     # 16:9 source → 4:3 target: crop mode must produce exactly the target size
     img = _solid(160, 90)
-    out = _fit_frame(img, (120, 90), Fit.crop)
+    out = source.fit_frame(img, (120, 90), source.Fit.crop)
     assert out.size == (120, 90)
 
 
 def test_fit_crop_no_black_bars():
     # crop mode fills the frame — no black pixels from padding
     img = _solid(160, 90, color=(200, 100, 50))
-    out = _fit_frame(img, (120, 90), Fit.crop)
+    out = source.fit_frame(img, (120, 90), source.Fit.crop)
     pixels = list(out.get_flattened_data())
     assert all(p != (0, 0, 0) for p in pixels)
 
@@ -127,14 +127,14 @@ def test_fit_crop_no_black_bars():
 def test_fit_contain_output_size():
     # contain mode must also produce exactly the target size
     img = _solid(160, 90)
-    out = _fit_frame(img, (120, 90), Fit.contain)
+    out = source.fit_frame(img, (120, 90), source.Fit.contain)
     assert out.size == (120, 90)
 
 
 def test_fit_contain_has_black_bars():
     # 16:9 source into 4:3 target → letterbox bars on top and bottom
     img = _solid(160, 90, color=(200, 100, 50))
-    out = _fit_frame(img, (120, 90), Fit.contain)
+    out = source.fit_frame(img, (120, 90), source.Fit.contain)
     # Top-left corner pixel must be black padding
     assert out.getpixel((0, 0)) == (0, 0, 0)
 
@@ -142,7 +142,7 @@ def test_fit_contain_has_black_bars():
 def test_fit_crop_uniform_scale():
     # A uniform-color source must stay that color after crop (no interpolation artifacts at edges)
     img = _solid(320, 180, color=(128, 64, 32))
-    out = _fit_frame(img, (240, 180), Fit.crop)
+    out = source.fit_frame(img, (240, 180), source.Fit.crop)
     center = out.getpixel((120, 90))
     assert center == (128, 64, 32)
 
