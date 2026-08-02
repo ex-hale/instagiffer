@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Protocol
 
@@ -14,6 +14,27 @@ from instagiffer.compat import uuid7
 from instagiffer.ffmpeg import FFmWrap
 from instagiffer.layer import Layer, SourceLayer, TextLayer
 from instagiffer.output import IGOutput
+
+
+@dataclass
+class Frame:
+    n: int
+    """Frame number. Starts at 0."""
+    length: float
+    """Frame duration in seconds."""
+    start: float
+    """Frame start time in seconds."""
+    end: float
+    """Frame end time in seconds."""
+    image: Image.Image
+    """Frame contents."""
+
+
+@dataclass
+class RenderContext:
+    frames: list[Frame]
+    output: IGOutput
+    ffmpep: FFmWrap
 
 
 class Encoder(Protocol):
@@ -47,15 +68,16 @@ class FfmpegMp4Encoder:
 
 
 class IGProject:
-    def __init__(self, project_id: str):
+    def __init__(self, project_id: str) -> None:
         if not isinstance(project_id, str):
             raise RuntimeError(f'Need string for {self.__class__.__name__} id!')
-        self.project_id = project_id
+        self.project_id: str = project_id
         self.layers: list[Layer] = []
         self.output: IGOutput = IGOutput()
 
     @property
     def project_dir(self) -> Path:
+        """Path into this projects background data directory."""
         return PROJECTS_DIR / self.project_id
 
     @classmethod
@@ -102,7 +124,8 @@ class IGProject:
         ffmpeg: FFmWrap | None = None,
         progress_callback: Callable[[float], None] | None = None,
     ) -> list[Image.Image]:
-        """Return composited PIL frames without writing any file.
+        """
+        Return composited PIL frames without writing any file.
         * first source layer provides the base
         * multi-source compositing comes later
         """
