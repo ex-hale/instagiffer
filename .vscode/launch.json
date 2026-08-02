@@ -22,12 +22,9 @@
       "request": "launch",
       "program": "${file}",
       "console": "integratedTerminal",
-      "windows": {
-        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
-      },
-      "osx": {
-        "python": "${workspaceFolder}/.venv/bin/python3"
-      }
+      "cwd": "${workspaceFolder}/src",
+      "python": "${command:python.interpreterPath}",
+      "env": {"PYTHONPATH": "./"}
     }
   ]
 }
