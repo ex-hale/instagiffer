@@ -7,12 +7,7 @@
       "request": "launch",
       "program": "${workspaceFolder}/src/instagiffer/__init__.py",
       "args": ["--debug"],
-      "windows": {
-        "python": "${workspaceFolder}/.venv/Scripts/python.exe"
-      },
-      "osx": {
-        "python": "${workspaceFolder}/.venv/bin/python3"
-      },
+      "python": "${command:python.interpreterPath}",
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
     },
@@ -24,7 +19,8 @@
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}/src",
       "python": "${command:python.interpreterPath}",
-      "env": {"PYTHONPATH": "./"}
+      "env": { "PYTHONPATH": "./" },
+      "justMyCode": false
     }
   ]
 }
