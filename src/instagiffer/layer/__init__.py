@@ -5,7 +5,7 @@ from instagiffer.layer import source, text
 SourceLayer = source.SourceLayer
 TextLayer = text.TextLayer
 
-type Layer = SourceLayer | TextLayer
+type IGLayer = SourceLayer | TextLayer
 
 
 _LAYER_MAP = {
@@ -14,8 +14,8 @@ _LAYER_MAP = {
 }
 
 
-def from_dicts(data: list[dict]) -> list[Layer]:
-    """Create list of Layer objects from serialized data."""
+def from_dicts(data: list[dict]) -> list[IGLayer]:
+    """Create list of IGLayer objects from serialized data."""
     layer_objects = []
     for layer_data in data:
         d = layer_data.copy()
@@ -26,7 +26,7 @@ def from_dicts(data: list[dict]) -> list[Layer]:
     return layer_objects
 
 
-def to_dicts(layers: list[Layer]) -> list[dict]:
+def to_dicts(layers: list[IGLayer]) -> list[dict]:
     """Serialize layer objects to dictionaries."""
     dicts = []
     for layer in layers:

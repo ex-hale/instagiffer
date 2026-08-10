@@ -7,7 +7,7 @@ TYPE = 'text'
 
 
 class HAlign(Enum):
-    """Hozizontal Alighments."""
+    """Horizontal Alignments."""
 
     none = 'none'
     left = 'left'
@@ -16,7 +16,7 @@ class HAlign(Enum):
 
 
 class VAlign(Enum):
-    """Vertical Alighments."""
+    """Vertical Alignments."""
 
     none = 'none'
     top = 'top'

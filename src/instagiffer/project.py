@@ -12,7 +12,7 @@ import instagiffer.layer
 from instagiffer.common import PROJECTS_DIR
 from instagiffer.compat import uuid7
 from instagiffer.ffmpeg import FFmWrap
-from instagiffer.layer import Layer, SourceLayer, TextLayer
+from instagiffer.layer import IGLayer, SourceLayer, TextLayer
 from instagiffer.output import IGOutput
 
 
@@ -34,11 +34,15 @@ class Frame:
 class RenderContext:
     frames: list[Frame]
     output: IGOutput
-    ffmpep: FFmWrap
+    ffmpeg: FFmWrap
 
 
 class Encoder(Protocol):
     def save(self, frames: list[Image.Image], output: IGOutput, path: Path) -> Path: ...
+
+
+class NoSuchEncoder(Exception):
+    pass
 
 
 class PilGifEncoder:
@@ -67,13 +71,17 @@ class FfmpegMp4Encoder:
         return self._ff.encode_mp4(frames, output.width, output.height, output.fps, path)
 
 
+ENCODERS: dict[str, Encoder] = {'gif': PilGifEncoder, 'mp4': FfmpegMp4Encoder}
+
+
 class IGProject:
     def __init__(self, project_id: str) -> None:
         if not isinstance(project_id, str):
             raise RuntimeError(f'Need string for {self.__class__.__name__} id!')
         self.project_id: str = project_id
-        self.layers: list[Layer] = []
+        self.layers: list[IGLayer] = []
         self.output: IGOutput = IGOutput()
+        self._ffmpeg: FFmWrap | None = None
 
     @property
     def project_dir(self) -> Path:
@@ -142,12 +150,16 @@ class IGProject:
     def render(
         self,
         output_path: Path | str,
-        encoder: Encoder | None = None,
         ffmpeg: FFmWrap | None = None,
         progress_callback: Callable[[float], None] | None = None,
     ) -> Path:
         frames = self.composite_frames(ffmpeg=ffmpeg, progress_callback=progress_callback)
-        return (encoder or PilGifEncoder()).save(frames, self.output, Path(output_path))
+        try:
+            encoder: Encoder = ENCODERS[self.output.format]
+        except KeyError:
+            raise NoSuchEncoder(f'No encoder "{self.output.format}"!') from KeyError
+
+        return encoder().save(frames, self.output, Path(output_path))
 
     def __repr__(self) -> str:
         return f'IGProject(id={self.project_id!r}, layers={len(self.layers)}, output={self.output!r})'
@@ -156,14 +168,14 @@ class IGProject:
 if __name__ == '__main__':
     from instagiffer.common import PROJECT_ROOT
 
-    # test
-    src: Path = PROJECT_ROOT / 'test' / 'data' / '288c39d6521eb8f1.mp4'
-    out: Path = PROJECT_ROOT / 'test' / 'data' / 'out.gif'
+    test_data: Path = PROJECT_ROOT / 'test' / 'data'
+    src: Path = test_data / '288c39d6521eb8f1.mp4'
+    out: Path = test_data / 'out.gif'
 
     p: IGProject = IGProject.new()
-    p.output = IGOutput(width=480, height=270, fps=10.0)
+    p.output = IGOutput(width=480, height=270, fps=10.0, format='mp4')
     p.add_source(str(src), fps=10.0, start_time=0.0, duration=3.0)
-    p.add_text('Hell, World!', color='#ff8080', size=48, font='comic', outline_size=10)
+    p.add_text('Hell, World!', color='#ff8080', size=48, font='impact', outline_size=12)
     p.save()
 
     result = p.render(out, progress_callback=lambda pct: print(f'\r{pct:.0%}', end='', flush=True))
