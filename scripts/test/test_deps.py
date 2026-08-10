@@ -13,9 +13,9 @@ SCRIPTS_DIR = THIS_DIR.parent
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.append(str(SCRIPTS_DIR))
 
-import check_deps  # noqa: E402
+import instagiffer.common  # noqa: E402
 
-import instagiffer.common
+from . import check_deps  # noqa: E402
 
 DEPS_ROOT = instagiffer.common.DEPS_ROOT
 

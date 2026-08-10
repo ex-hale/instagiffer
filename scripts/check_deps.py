@@ -1,7 +1,7 @@
 from __future__ import annotations
-import stat
 
 import io
+import stat
 import urllib.request
 from collections.abc import Callable
 from pathlib import Path

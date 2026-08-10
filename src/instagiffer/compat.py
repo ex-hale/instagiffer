@@ -1,4 +1,4 @@
-"""Compatiblity things for Python versions."""
+"""Compatibility things for Python versions."""
 
 import sys
 import uuid
