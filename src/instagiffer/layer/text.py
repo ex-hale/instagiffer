@@ -46,14 +46,13 @@ class TextLayer:
             return [f.image or blank for f in render_context.frames]
 
         images: list[Image.Image] = []
+        stroke = self.outline_size if self.outline_color else 0
+        font = self._get_font()
         for frame in render_context.frames:
             image = blank if frame.image is None else frame.image.copy()
             image_draw = ImageDraw.Draw(image)
-            stroke = self.outline_size if self.outline_color else 0
-            font = self._get_font()
-            x, y = self._get_x_y(font, stroke, image, image_draw)
             image_draw.text(
-                (x, y),
+                self._get_x_y(font, stroke, image, image_draw),
                 self.text,
                 font=font,
                 fill=self.color,
