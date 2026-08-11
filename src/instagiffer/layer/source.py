@@ -51,8 +51,10 @@ class SourceLayer:
         size = (render_context.output.width, render_context.output.height)
         images = []
         paths = sorted(self.frames_dir().glob(FRAME_GLOB))
+        max_frame = len(paths) - 1
         for i, frame in enumerate(render_context.frames):
-            img = Image.open(paths[frame.source_frame or i]).convert('RGB')
+            # TODO layer on top of last `frame`
+            img = Image.open(paths[min(i, max_frame)]).convert('RGB')
             if img.size != size:
                 img = fit_frame(img, size, self.fit)
             images.append(img)
