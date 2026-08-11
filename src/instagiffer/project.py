@@ -116,8 +116,9 @@ class IGProject:
         with open(self.project_dir / 'project.json', 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
 
-    def add_source(self, path: str, **kwargs) -> SourceLayer:
-        layer = SourceLayer(path=path, **kwargs)
+    def add_source(self, path: str | Path, **kwargs) -> SourceLayer:
+        string_path = path if isinstance(path, str) else str(path)
+        layer = SourceLayer(string_path, **kwargs)
         self.layers.append(layer)
         return layer
 
@@ -204,7 +205,7 @@ if __name__ == '__main__':
 
     p: IGProject = IGProject.new()
     p.output = IGOutput(width=480, height=270, fps=10.0, format='mp4')
-    p.add_source(str(src), fps=3.0, start_time=0.0, duration=3.0)
+    p.add_source(src, fps=3.0, start_time=0.0, duration=3.0)
     p.add_text('Heeello, LindaaA!', color='#ff8080', size=42, font='comic', outline_size=6)
     p.save()
 
