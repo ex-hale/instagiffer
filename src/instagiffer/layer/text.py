@@ -3,6 +3,8 @@ from enum import Enum
 
 from PIL import Image, ImageDraw, ImageFont
 
+from instagiffer.render import RenderContext
+
 TYPE = 'text'
 
 
@@ -27,7 +29,6 @@ class VAlign(Enum):
 @dataclass
 class TextLayer:
     """Overlay text. timing, animation etc. later."""
-
     text: str = ''
     font: str = ''
     size: int = 24
@@ -39,13 +40,30 @@ class TextLayer:
     align_vertical: VAlign = VAlign.bottom
     margins: tuple[int, int, int, int] = (20, 20, 20, 20)
 
-    def draw(self, frame: Image.Image) -> Image.Image:
+    def draw(self, render_context: RenderContext) -> list[Image.Image]:
+        blank = render_context.output.get_blank()
         if not self.text:
-            return frame
+            return [f.image or blank for f in render_context.frames]
 
-        frame = frame.copy()
-        d = ImageDraw.Draw(frame)
+        images: list[Image.Image] = []
+        for frame in render_context.frames:
+            image = blank if frame.image is None else frame.image.copy()
+            image_draw = ImageDraw.Draw(image)
+            stroke = self.outline_size if self.outline_color else 0
+            font = self._get_font()
+            x, y = self._get_x_y(font, stroke, image, image_draw)
+            image_draw.text(
+                (x, y),
+                self.text,
+                font=font,
+                fill=self.color,
+                stroke_width=stroke,
+                stroke_fill=self.outline_color or None,
+            )
+            images.append(image)
+        return images
 
+    def _get_font(self) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
         font: ImageFont.FreeTypeFont | ImageFont.ImageFont | None = None
         if self.font:
             try:
@@ -57,11 +75,18 @@ class TextLayer:
                 font = ImageFont.load_default(size=self.size)
             except TypeError:
                 font = ImageFont.load_default()
+        return font
 
-        stroke = self.outline_size if self.outline_color else 0
-        bbox = d.textbbox((0, 0), self.text, font=font, stroke_width=stroke)
-        tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
-        w, h = frame.size
+    def _get_x_y(
+        self,
+        font: ImageFont.FreeTypeFont | ImageFont.ImageFont,
+        stroke: int,
+        image: Image.Image,
+        image_draw: ImageDraw.ImageDraw,
+    ) -> tuple[int, int]:
+        bbox = image_draw.textbbox((0, 0), self.text, font=font, stroke_width=stroke)
+        tw, th = int(bbox[2] - bbox[0]), int(bbox[3] - bbox[1])
+        w, h = image.size
         ml, mt, mr, mb = self.margins
 
         if self.align_horizontal == HAlign.left:
@@ -81,16 +106,7 @@ class TextLayer:
             y = (h - th) // 2
         else:
             y = self.position[1]
-
-        d.text(
-            (x, y),
-            self.text,
-            font=font,
-            fill=self.color,
-            stroke_width=stroke,
-            stroke_fill=self.outline_color or None,
-        )
-        return frame
+        return x, y
 
 
 def from_dict(d: dict) -> TextLayer:
@@ -99,3 +115,7 @@ def from_dict(d: dict) -> TextLayer:
     d['position'] = tuple(d['position'])
     d['margins'] = tuple(d['margins'])
     return TextLayer(**d)
+
+
+def to_dict(layer: TextLayer):
+    pass

@@ -1,3 +1,10 @@
+"""
+Root module for all Instagiffer Layers.
+
+Each Layer has a `draw` function that accepts a `RenderContext` and
+returns a new list of PIL Images.
+"""
+
 import dataclasses
 
 from instagiffer.layer import source, text
@@ -36,6 +43,7 @@ def to_dicts(layers: list[IGLayer]) -> list[dict]:
             d['align_vertical'] = layer.align_vertical.value
             d['type'] = 'text'
         else:
+            # Get actual string value from fitting enum:
             d['fit'] = layer.fit.value
             d['type'] = 'source'
         dicts.append(d)

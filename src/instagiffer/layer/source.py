@@ -1,5 +1,8 @@
+"""
+The Instagiffer SouceLayer is has a video file as source for the resulting PIL Images.
+"""
+
 import hashlib
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -7,13 +10,15 @@ from pathlib import Path
 from PIL import Image
 
 from instagiffer.common import DOWNLOADS_DIR, FRAMES_CACHE_DIR
-from instagiffer.ffmpeg import FFmWrap
-from instagiffer.output import IGOutput
+from instagiffer.ffmpeg import FRAME_GLOB
+from instagiffer.render import RenderContext
 
 TYPE = 'source'
 
 
 class Fit(Enum):
+    """Image fitting options enum: `crop` or `contain`."""
+
     crop = 'crop'
     """Scale to fill, crop excess — never distorts, may lose edges."""
     contain = 'contain'
@@ -30,6 +35,28 @@ class SourceLayer:
     duration: float = 5.0
     scale: float = 1.0
     fit: Fit = Fit.crop
+    """Image fitting options enum: `crop` or `contain`."""
+
+    def draw(self, render_context: RenderContext) -> list[Image.Image]:
+        if not self.frames_are_cached():
+            render_context.ffmpeg.extract_frames(
+                self.local_source_path(),
+                self.frames_dir(),
+                fps=self.fps,
+                start_time=self.start_time,
+                duration=self.duration,
+                scale=self.scale,
+                progress_callback=render_context.progress_callback,
+            )
+        size = (render_context.output.width, render_context.output.height)
+        images = []
+        paths = sorted(self.frames_dir().glob(FRAME_GLOB))
+        for i, frame in enumerate(render_context.frames):
+            img = Image.open(paths[frame.source_frame or i]).convert('RGB')
+            if img.size != size:
+                img = fit_frame(img, size, self.fit)
+            images.append(img)
+        return images
 
     @property
     def is_remote(self) -> bool:
@@ -52,32 +79,7 @@ class SourceLayer:
 
     def frames_are_cached(self) -> bool:
         d = self.frames_dir()
-        return d.is_dir() and any(d.glob('image*.png'))
-
-    def get_frames(
-        self,
-        output: IGOutput,
-        ffmpeg: FFmWrap | None = None,
-        progress_callback: Callable[[float], None] | None = None,
-    ) -> list[Image.Image]:
-        if not self.frames_are_cached():
-            (ffmpeg or FFmWrap()).extract_frames(
-                self.local_source_path(),
-                self.frames_dir(),
-                fps=self.fps,
-                start_time=self.start_time,
-                duration=self.duration,
-                scale=self.scale,
-                progress_callback=progress_callback,
-            )
-        size = (output.width, output.height)
-        frames = []
-        for p in sorted(self.frames_dir().glob('image*.png')):
-            img = Image.open(p).convert('RGB')
-            if img.size != size:
-                img = fit_frame(img, size, self.fit)
-            frames.append(img)
-        return frames
+        return d.is_dir() and any(d.glob(FRAME_GLOB))
 
 
 def fit_frame(img: Image.Image, size: tuple[int, int], fit: Fit) -> Image.Image:
