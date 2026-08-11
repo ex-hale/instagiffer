@@ -19,12 +19,7 @@
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}/src",
       "python": "${command:python.interpreterPath}",
-<<<<<<< Updated upstream
-      "env": { "PYTHONPATH": "./" },
-      "justMyCode": false
-=======
-      "env": {"PYTHONPATH": "${workspaceFolder}"}
->>>>>>> Stashed changes
+      "env": {"PYTHONPATH": "${workspaceFolder}"},
     }
   ]
 }
