@@ -20,6 +20,7 @@
       "cwd": "${workspaceFolder}/src",
       "python": "${command:python.interpreterPath}",
       "env": {"PYTHONPATH": "${workspaceFolder}"},
+      "justMyCode": false
     }
   ]
 }
