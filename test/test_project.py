@@ -2,8 +2,8 @@ import pytest
 from PIL import Image
 
 from instagiffer.layer import source, text
-from instagiffer.output import IGOutput
 from instagiffer.project import IGProject
+from instagiffer.render import IGOutput
 
 
 @pytest.fixture
@@ -110,14 +110,14 @@ def _solid(w: int, h: int, color: tuple[int, int, int] = (200, 100, 50)) -> Imag
 
 
 def test_fit_crop_output_size():
-    # 16:9 source → 4:3 target: crop mode must produce exactly the target size
+    """16:9 source → 4:3 target: crop mode must produce exactly the target size."""
     img = _solid(160, 90)
     out = source.fit_frame(img, (120, 90), source.Fit.crop)
     assert out.size == (120, 90)
 
 
 def test_fit_crop_no_black_bars():
-    # crop mode fills the frame — no black pixels from padding
+    """Crop mode fills the frame — no black pixels from padding."""
     img = _solid(160, 90, color=(200, 100, 50))
     out = source.fit_frame(img, (120, 90), source.Fit.crop)
     pixels = list(out.get_flattened_data())
@@ -125,14 +125,14 @@ def test_fit_crop_no_black_bars():
 
 
 def test_fit_contain_output_size():
-    # contain mode must also produce exactly the target size
+    """Contain mode must also produce exactly the target size."""
     img = _solid(160, 90)
     out = source.fit_frame(img, (120, 90), source.Fit.contain)
     assert out.size == (120, 90)
 
 
 def test_fit_contain_has_black_bars():
-    # 16:9 source into 4:3 target → letterbox bars on top and bottom
+    """16:9 source into 4:3 target → letterbox bars on top and bottom."""
     img = _solid(160, 90, color=(200, 100, 50))
     out = source.fit_frame(img, (120, 90), source.Fit.contain)
     # Top-left corner pixel must be black padding
@@ -140,7 +140,10 @@ def test_fit_contain_has_black_bars():
 
 
 def test_fit_crop_uniform_scale():
-    # A uniform-color source must stay that color after crop (no interpolation artifacts at edges)
+    """
+    A uniform-color source must stay that color after crop
+    (no interpolation artifacts at edges).
+    """
     img = _solid(320, 180, color=(128, 64, 32))
     out = source.fit_frame(img, (240, 180), source.Fit.crop)
     center = out.getpixel((120, 90))
