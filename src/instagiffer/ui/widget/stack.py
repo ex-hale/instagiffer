@@ -10,19 +10,19 @@ from instagiffer.project import IGLayer, SourceLayer, TextLayer
 
 
 class IgfStack(QtWidgets.QScrollArea):
-    add_source_requested = QtCore.Signal(str)
-    add_text_requested = QtCore.Signal(str)
+    add_source_requested = QtCore.Signal()
+    add_text_requested = QtCore.Signal()
 
     def __init__(self, parent):
         super().__init__(parent)
         self.contents = QtWidgets.QWidget(self)
         self.v_layout = QtWidgets.QVBoxLayout(self.contents)
 
-    def add_source(self, url: str = '') -> None:
-        self.add_source_requested.emit(url)
+    def add_source(self) -> None:
+        self.add_source_requested.emit()
 
-    def add_text(self, text: str = '') -> None:
-        self.add_text_requested.emit(text)
+    def add_text(self) -> None:
+        self.add_text_requested.emit()
 
     def list_layers(self, layers: list):
         pass
