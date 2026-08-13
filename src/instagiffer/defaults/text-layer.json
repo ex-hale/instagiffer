@@ -1,0 +1,13 @@
+{
+  "text": "",
+  "font": "impact",
+  "size": 42,
+  "color": "#ff8080",
+  "outline_color": "#000000",
+  "outline_size": 6,
+  "position": [0, 0],
+  "align_horizontal": "center",
+  "align_vertical": "bottom",
+  "margins": [20, 20, 20, 20],
+  "type": "text"
+}

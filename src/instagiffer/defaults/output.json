@@ -1,0 +1,9 @@
+{
+  "width": 480,
+  "height": 270,
+  "fps": 15.0,
+  "colors": 256,
+  "optimize": true,
+  "loop": 0,
+  "format": "gif"
+}
