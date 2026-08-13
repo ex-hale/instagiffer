@@ -201,7 +201,7 @@ if __name__ == '__main__':
 
     test_data: Path = PROJECT_ROOT / 'test' / 'data'
     src: Path = test_data / '288c39d6521eb8f1.mp4'
-    out: Path = test_data / 'out2'
+    out: Path = test_data / 'temp' / 'out2'
 
     p: IGProject = IGProject.new()
     p.output = IGOutput(width=480, height=270, fps=10.0, format='mp4')

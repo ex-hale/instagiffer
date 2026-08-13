@@ -27,3 +27,4 @@ test_data/
 
 # temporary stuffs
 _ *
+/test/data/temp
