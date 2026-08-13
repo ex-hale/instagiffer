@@ -17,12 +17,14 @@ elif IM_A_LINUX:
     FF_EXES: tuple[str, ...] = _FF_EXES
     FFMPEG_URL = f'{_FFMPEG_BTBN}ffmpeg-master-latest-linux64-gpl.tar.xz'
 elif IM_A_MAC:
-    evermeet_repo = 'https://evermeet.cx/ffmpeg/getrelease/'
+    mac_repo = 'https://evermeet.cx/ffmpeg/getrelease/'
     FF_EXES: tuple[str, ...] = _FF_EXES
-    FFMPEG_URL = f'{evermeet_repo}zip'
-    FFPROBE_URL = f'{evermeet_repo}ffprobe/zip'
+    FFMPEG_URL = f'{mac_repo}zip'
+    FFPROBE_URL = f'{mac_repo}ffprobe/zip'
 
-_HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'}
+_HEADERS = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0'
+}
 _CHUNK_SIZE = 8192
 
 
