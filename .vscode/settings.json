@@ -1,0 +1,48 @@
+{
+  "cSpell.customDictionaries": {
+    "project-words": {
+      "path": "${workspaceRoot}/.vscode/project-words.txt",
+      "addWords": true
+    },
+    "custom": true,
+    "internal-terms": true
+  },
+  "python.testing.pytestArgs": ["test"],
+  "python.testing.unittestEnabled": false,
+  "python.testing.pytestEnabled": true,
+
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/__pycache__": true,
+    ".pytest_cache": true
+  },
+  "workbench.colorCustomizations": {
+    "tab.activeBackground": "#7695c8",
+    "tab.activeForeground": "#fff",
+    "tab.inactiveForeground": "#9ca6b9",
+    "tab.inactiveBackground": "#080b12",
+    "tab.hoverBackground": "#2c4a1c",
+    "editorGroupHeader.tabsBackground": "#080b12",
+
+    "titleBar.activeBackground": "#7695c8",
+    "titleBar.inactiveBackground": "#495e7f",
+    "titleBar.activeForeground": "#fff",
+
+    "gitDecoration.ignoredResourceForeground": "#fff7f0d4",
+    "gitDecoration.untrackedResourceForeground": "#fff",
+
+    "list.errorForeground": "#ff9f9f",
+    "list.warningForeground": "#ff5f1f",
+    "list.activeSelectionForeground": "#000000",
+    "list.activeSelectionBackground": "#6b7b8b",
+    "list.inactiveSelectionBackground": "#6b7b8b",
+
+    "statusBar.debuggingBackground": "#ff543e",
+    "statusBar.background": "#7695c8",
+    "statusBar.foreground": "#fff",
+  }
+}

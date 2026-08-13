@@ -19,7 +19,7 @@
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}/src",
       "python": "${command:python.interpreterPath}",
-      "env": {"PYTHONPATH": "${workspaceFolder}"},
+      "env": {"PYTHONPATH": "${workspaceFolder}:${workspaceFolder}/src"},
       "justMyCode": false
     }
   ]

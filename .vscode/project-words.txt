@@ -1,0 +1,14 @@
+addopts
+BTBN
+ffprobe
+FFPROBE
+instagiffer
+libxcb
+poethepoet
+pycache
+pycodestyle
+pyflakes
+pyside
+pyupgrade
+setuptools
+testpaths
