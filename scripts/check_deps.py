@@ -1,3 +1,12 @@
+"""FIXME: evermeet will not provide binaries for arm:
+https://evermeet.cx/ffmpeg/apple-silicon-arm
+We're currently downloading the intel binaries!
+Which might break with a `bad CPU type in executable` error!
+
+We don't "need" the binaries locally tho! It's rather a fallback.
+Installing via `brew install ffmpeg` and using from the system is fine!
+"""
+
 from __future__ import annotations
 
 import io
