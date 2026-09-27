@@ -51,7 +51,15 @@ class VideoInfo:
         return self.width / self.height if self.height else 0.0
 
     def __iter__(self):
-        for attr in ('width', 'height', 'aspect_ratio', 'duration_sec', 'duration_ms', 'fps', 'codec'):
+        for attr in (
+            'width',
+            'height',
+            'aspect_ratio',
+            'duration_sec',
+            'duration_ms',
+            'fps',
+            'codec',
+        ):
             yield attr, getattr(self, attr)
 
 
@@ -179,11 +187,16 @@ class FFmWrap:
             error_code = f'{process.returncode}'
             if process.returncode == EINVAL:
                 error_code += ' Invalid Argument'
-            raise FFmpegError(f'ffmpeg exited with code {error_code}.\n Command: {subprocess.list2cmdline(cmd)}')
+            raise FFmpegError(
+                f'ffmpeg exited with code {error_code}.\n Command: {subprocess.list2cmdline(cmd)}'
+            )
 
         frames = sorted(output_dir.glob(FRAME_GLOB))
         if not frames:
-            raise FFmpegError(f'No frames were extracted from "{video_path.name}". Is it a supported video format?')
+            raise FFmpegError(
+                f'No frames were extracted from "{video_path.name}". '
+                'Is it a supported video format?'
+            )
 
         log.info('Extracted %d frames from "%s"', len(frames), video_path.name)
 
@@ -266,7 +279,7 @@ class FFmWrap:
         width: int,
         height: int,
         fps: float,
-        path: Path,
+        path: str | Path,
     ) -> Path:
         """Encode a sequence of PIL Images to an H.264 MP4 suitable for all modern browsers.
 
@@ -312,12 +325,16 @@ class FFmWrap:
         _, err = proc.communicate(input=raw)
 
         if proc.returncode != 0:
-            raise FFmpegError(f'MP4 encoding failed (exit {proc.returncode}):\n{err.decode(errors="replace")}')
+            raise FFmpegError(
+                f'MP4 encoding failed (exit {proc.returncode}):\n{err.decode(errors="replace")}'
+            )
 
         log.info('Encoded %d frames to "%s"', len(frames), path.name)
         return path
 
-    def _check_paths(self, video_path: str | Path, output_dir: str | Path | None = None) -> tuple[Path, Path]:
+    def _check_paths(
+        self, video_path: str | Path, output_dir: str | Path | None = None
+    ) -> tuple[Path, Path]:
         video_path = Path(video_path)
         if not video_path.is_file():
             raise FileNotFoundError(f'Video not found: {video_path}')
@@ -355,7 +372,9 @@ class FFmWrap:
                     self.ffprobe = ff_test
                     log.debug(f'Using ffprobe from next to given path: {self.ffprobe}')
             else:
-                logging.error(f'Could not make sense of given {ffmpeg_path = }, checking system ...')
+                logging.error(
+                    f'Could not make sense of given {ffmpeg_path = }, checking system ...'
+                )
 
         else:
             this_path = shutil.which(FFMPEG_EXE)

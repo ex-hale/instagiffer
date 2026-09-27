@@ -19,7 +19,7 @@ DEFAULT_DURATION = 3.0
 
 
 class Encoder(Protocol):
-    def save(self, render_context: RenderContext, path: Path) -> Path: ...
+    def save(self, render_context: RenderContext, path: str | Path) -> Path: ...
 
 
 class NoSuchEncoder(Exception):
@@ -27,7 +27,7 @@ class NoSuchEncoder(Exception):
 
 
 class PilGifEncoder:
-    def save(self, render_context: RenderContext, path: Path) -> Path:
+    def save(self, render_context: RenderContext, path: str | Path) -> Path:
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
         duration_ms = int(1000 / render_context.output.fps)
@@ -48,7 +48,7 @@ class PilGifEncoder:
 
 
 class FfmpegMp4Encoder:
-    def save(self, render_context: RenderContext, path: Path) -> Path:
+    def save(self, render_context: RenderContext, path: str | Path) -> Path:
         return render_context.ffmpeg.encode_mp4(
             frames=[f.image for f in render_context.frames],
             width=render_context.output.width,
@@ -153,7 +153,7 @@ class IGProject:
         progress_callback: Callable[[float], None] | None = None,
     ) -> Path:
         try:
-            encoder: Encoder = ENCODERS[self.output.format]
+            encoder: type[Encoder] = ENCODERS[self.output.format]
         except KeyError:
             raise NoSuchEncoder(f'No encoder "{self.output.format}"!') from KeyError
 
@@ -161,7 +161,7 @@ class IGProject:
             render_context = self.get_default_render_context(progress_callback)
 
         render_context.update_images(self.composite_frames(render_context))
-        return encoder().save(render_context, Path(output_path))
+        return encoder().save(render_context, output_path)
 
     def __repr__(self) -> str:
         return (
@@ -206,7 +206,7 @@ if __name__ == '__main__':
     p: IGProject = IGProject.new()
     p.output = IGOutput(width=480, height=270, fps=10.0, format='mp4')
     p.add_source(src, fps=3.0, start_time=0.0, duration=3.0)
-    p.add_text('Heeello, LindaaA!', color='#ff8080', size=42, font='comic', outline_size=6)
+    p.add_text('Hello, Linda!', color='#ff8080', size=42, font='comic', outline_size=6)
     p.save()
 
     result = p.render(out, progress_callback=lambda pct: print(f'\r{pct:.0%}', end='', flush=True))
