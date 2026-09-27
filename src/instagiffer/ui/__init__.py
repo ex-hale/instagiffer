@@ -20,12 +20,15 @@ class InstagifferUI(QtWidgets.QMainWindow):
         self._setup_project()
 
     def _setup_project(self):
+        """Load up the a initial project. Might be from:
+        * default project definition
+        * project file path given via commandline
+        """
         pass
-
 
     def _setup_ui(self):
         self.setWindowTitle(f'Instagiffer - {instagiffer.__version__}')
-        self.setWindowIcon(QtGui.QIcon(str(instagiffer.common.ASSETS_PATH / 'instagiffer.ico')))
+        self.setWindowIcon(QtGui.QIcon(str(instagiffer.common.ASSETS_DIR / 'instagiffer.ico')))
 
         self.splitter = QtWidgets.QSplitter(self)
         self.splitter.setChildrenCollapsible(False)

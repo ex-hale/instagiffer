@@ -8,6 +8,7 @@ instagiffer
 LANCZOS
 libx
 libxcb
+LOCALAPPDATA
 moov
 movflags
 poethepoet

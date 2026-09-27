@@ -9,11 +9,12 @@ IM_A_LINUX: bool = sys.platform == 'linux'
 IM_A_WIN: bool = sys.platform == 'win32'
 IM_A_MAC: bool = sys.platform == 'darwin'
 
-LIB_PATH = Path(__file__).parent
-SOURCE_PATH = LIB_PATH.parent
-PROJECT_ROOT = SOURCE_PATH.parent
-DEPS_ROOT = PROJECT_ROOT / 'deps'
-ASSETS_PATH = PROJECT_ROOT / 'assets'
+LIB_DIR = Path(__file__).parent
+SOURCE_DIR = LIB_DIR.parent
+DEFAULTS_DIR = LIB_DIR / 'defaults'
+PROJECT_DIR = SOURCE_DIR.parent
+DEPS_ROOT = PROJECT_DIR / 'deps'
+ASSETS_DIR = PROJECT_DIR / 'assets'
 
 if IM_A_LINUX:
     DEPS_DIR = DEPS_ROOT / 'linux'

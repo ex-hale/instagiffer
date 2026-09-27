@@ -9,7 +9,7 @@ from typing import Protocol
 from PIL import Image
 
 import instagiffer.layer
-from instagiffer.common import PROJECTS_DIR
+from instagiffer.common import DEFAULTS_DIR, PROJECTS_DIR
 from instagiffer.compat import uuid7
 from instagiffer.ffmpeg import FFmWrap
 from instagiffer.layer import IGLayer, SourceLayer, TextLayer
@@ -197,9 +197,9 @@ class IGProject:
 
 
 if __name__ == '__main__':
-    from instagiffer.common import PROJECT_ROOT
+    from instagiffer.common import PROJECT_DIR
 
-    test_data: Path = PROJECT_ROOT / 'test' / 'data'
+    test_data: Path = PROJECT_DIR / 'test' / 'data'
     src: Path = test_data / '288c39d6521eb8f1.mp4'
     out: Path = test_data / 'temp' / 'out2'
 
