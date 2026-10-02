@@ -4,8 +4,10 @@ Root module for all Instagiffer Layers.
 Each Layer has a `draw` function that accepts a `RenderContext` and
 returns a new list of PIL Images.
 """
+import sys
 
 import dataclasses
+from enum import Enum
 
 from instagiffer.layer import source, text
 
@@ -37,14 +39,10 @@ def to_dicts(layers: list[IGLayer]) -> list[dict]:
     """Serialize layer objects to dictionaries."""
     dicts = []
     for layer in layers:
-        d = dataclasses.asdict(layer)
-        if isinstance(layer, TextLayer):
-            d['align_horizontal'] = layer.align_horizontal.value
-            d['align_vertical'] = layer.align_vertical.value
-            d['type'] = 'text'
-        else:
-            # Get actual string value from fitting enum:
-            d['fit'] = layer.fit.value
-            d['type'] = 'source'
-        dicts.append(d)
+        data = dataclasses.asdict(layer)
+        for key, value in data.items():
+            if isinstance(value, Enum):
+                data[key] = value.value
+        data['type'] = sys.modules[layer.__class__.__module__].TYPE
+        dicts.append(data)
     return dicts
