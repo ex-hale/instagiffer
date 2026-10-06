@@ -1,0 +1,7 @@
+{
+  "output": { "_template": "output.json" },
+  "layers": [
+    { "_template": "source-layer.json" },
+    { "_template": "text-layer.json" }
+  ]
+}

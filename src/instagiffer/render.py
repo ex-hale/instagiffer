@@ -15,6 +15,7 @@ class IGOutput:
     optimize: bool = True
     loop: int = 0
     format: str = 'gif'
+    length: int | float = 3.0
 
     def get_blank(self) -> Image.Image:
         return Image.new('RGB', (self.width, self.height), (0, 0, 0))

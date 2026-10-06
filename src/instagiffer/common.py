@@ -33,5 +33,6 @@ else:
 
 APP_DATA_DIR = _APP_DATA_ROOT / 'instagiffer'
 PROJECTS_DIR = APP_DATA_DIR / 'projects'
+USER_DEFAULTS_DIR = APP_DATA_DIR / 'defaults'
 DOWNLOADS_DIR = APP_DATA_DIR / 'downloads'
 FRAMES_CACHE_DIR = _CACHE_ROOT / 'instagiffer' / 'frames_cache'

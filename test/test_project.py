@@ -2,7 +2,7 @@ import pytest
 from PIL import Image
 
 from instagiffer.layer import source, text
-from instagiffer.project import IGProject
+from instagiffer.project import PROJECT_FILE_NAME, IGProject
 from instagiffer.render import IGOutput
 
 
@@ -41,7 +41,7 @@ def project(tmp_path, monkeypatch):
 
 def test_save_creates_file(project):
     project.save()
-    assert (project.project_dir / 'project.json').is_file()
+    assert (project.project_dir / PROJECT_FILE_NAME).is_file()
 
 
 def test_roundtrip_output(project):

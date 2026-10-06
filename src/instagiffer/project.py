@@ -9,13 +9,16 @@ from typing import Protocol
 from PIL import Image
 
 import instagiffer.layer
-from instagiffer.common import DEFAULTS_DIR, PROJECTS_DIR
+from instagiffer.common import DEFAULTS_DIR, PROJECTS_DIR, USER_DEFAULTS_DIR
 from instagiffer.compat import uuid7
 from instagiffer.ffmpeg import FFmWrap
 from instagiffer.layer import IGLayer, SourceLayer, TextLayer
 from instagiffer.render import Frame, IGOutput, RenderContext
 
-DEFAULT_DURATION = 3.0
+_TEMPLATE = '_template'
+TEMPLATE_PATTERN = '{}.json'
+PROJECT_FILE_NAME = TEMPLATE_PATTERN.format('project')
+PROJECT_ID = 'project_id'
 
 
 class Encoder(Protocol):
@@ -67,8 +70,6 @@ class IGProject:
             raise RuntimeError(f'Need string for {self.__class__.__name__} id!')
         self.name: str = ''
         """Display name of the project."""
-        self.duration: int | float | None = None
-        """Duration in seconds."""
         self.project_id: str = project_id
         """Internal identifier."""
         self.layers: list[IGLayer] = []
@@ -86,34 +87,38 @@ class IGProject:
         return PROJECTS_DIR / self.project_id
 
     @classmethod
-    def new(cls, duration: int | float | None = None) -> IGProject:
+    def new(cls) -> IGProject:
         """Create new empty project."""
-        if not duration:
-            duration = DEFAULT_DURATION
-        return cls(project_id=str(uuid7()), duration=duration)
+        return cls(project_id=str(uuid7()))
 
     @classmethod
-    def load(cls, project_id: str) -> IGProject:
-        """Load project from stored data in instagiffer data dir."""
-        project = cls(project_id=project_id)
-        project_file = project.project_dir / 'project.json'
+    def load(cls, identifier: str | Path) -> IGProject:
+        """Load project from path or stored data in instagiffer data dir."""
+        if isinstance(identifier, str) and (PROJECTS_DIR / identifier).is_dir():
+            project = cls(project_id=identifier)
+            project_file = project.project_dir / PROJECT_FILE_NAME
+        else:
+            project = cls.new()
+            project_file = Path(identifier)
+
         if not project_file.is_file():
             raise FileNotFoundError(f'Project not found: {project_file}')
-        with open(project_file, encoding='utf-8') as f:
-            data = json.load(f)
-        project.output = IGOutput(**data['output'])
-        project.layers = instagiffer.layer.from_dicts(data['layers'])
-        return project
+
+        return project.load_data(json.loads(project_file.read_bytes()))
+
+    def load_data(self, data: dict) -> IGProject:
+        self.output = IGOutput(**data['output'])
+        self.layers = instagiffer.layer.from_dicts(data['layers'])
+        return self
 
     def save(self):
         """Save project to stored data in instagiffer data dir."""
         self.project_dir.mkdir(parents=True, exist_ok=True)
         data = {
-            'project_id': self.project_id,
             'output': asdict(self.output),
             'layers': instagiffer.layer.to_dicts(self.layers),
         }
-        with open(self.project_dir / 'project.json', 'w', encoding='utf-8') as f:
+        with open(self.project_dir / PROJECT_FILE_NAME, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
 
     def add_source(self, path: str | Path, **kwargs) -> SourceLayer:
@@ -194,6 +199,62 @@ class IGProject:
         if progress_callback is not None:
             self._render_context.progress_callback = progress_callback
         return self._render_context
+
+
+def get_default() -> IGProject:
+    """Get default project object from built-in or user defined defaults.
+
+    For EACH of the output and layer parts in a project:
+    Always look for USER defaults first, then for builtin defaults.
+    If a "_template" key is present, try loading from that template.
+    """
+    project_file = USER_DEFAULTS_DIR / PROJECT_FILE_NAME
+    if not project_file.is_file():
+        project_file = DEFAULTS_DIR / PROJECT_FILE_NAME
+    if project_file.is_file():
+        data = json.loads(project_file.read_bytes())
+    if PROJECT_ID not in data:
+        data[PROJECT_ID] = str(uuid7())
+
+    data['output'] = _check_default_component(data.get('output'), 'output')
+    data['layers'] = _check_default_component(data.get('layers'), 'layers')
+    if not isinstance(data['layers'], list):
+        data['layers'] = []
+    for i, layer_data in enumerate(data['layers']):
+        data['layers'][i] = _check_default_component(layer_data)
+
+    project = IGProject.new()
+    project.load_data(data)
+    return project
+
+
+def _check_default_component(container: dict | None, name: str | None = None) -> dict:
+    """Resolve found `_template` trying absolute path first, then
+    relative to `USER_DEFAULTS_DIR`, or `DEFAULTS_DIR`.
+    """
+    # Early exit if the component is already done.
+    if container is not None and _TEMPLATE not in container and container:
+        return container
+
+    if container is None:
+        container = {}
+
+    template_name: str = ''
+    if _TEMPLATE in container:
+        template_name = container.pop(_TEMPLATE)
+    if not template_name and name is not None:
+        template_name = TEMPLATE_PATTERN.format(name)
+
+    template_path = Path(template_name)
+    if not template_path.is_file():
+        template_path = USER_DEFAULTS_DIR / template_name
+    if not template_path.is_file():
+        template_path = DEFAULTS_DIR / template_name
+
+    if template_path.is_file():
+        container.update(json.loads(template_path.read_bytes()))
+
+    return container
 
 
 if __name__ == '__main__':
