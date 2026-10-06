@@ -4,11 +4,12 @@ import instagiffer
 import instagiffer.common
 
 # from instagiffer.config import Config, UiSettings
+import instagiffer.project
 from instagiffer.ui.widget.stack import IgfStack
 from instagiffer.ui.widget.timeline import TimeLine
 from instagiffer.ui.widget.view import IgfView
 
-DEFAULT_WIN_SIZE = (800, 500)
+DEFAULT_WIN_SIZE = (1000, 700)
 
 
 class InstagifferUI(QtWidgets.QMainWindow):
@@ -21,10 +22,19 @@ class InstagifferUI(QtWidgets.QMainWindow):
 
     def _setup_project(self):
         """Load up the a initial project. Might be from:
-        * default project definition
-        * project file path given via commandline
+        * built-in default project
+        * last open project (based on prefs)
+        * from project file path given via commandline
+        * user defined default
         """
-        pass
+        # TODO: if config.reopen_last: load last from recent stack
+        self._project = instagiffer.project.get_default()
+        self._init_project_ui()
+
+    def _init_project_ui(self):
+        """Cleanup ui and refill things with currently loaded project things."""
+        if self._project is not None:
+            self.stack.draw(self._project.layers)
 
     def _setup_ui(self):
         self.setWindowTitle(f'Instagiffer - {instagiffer.__version__}')
@@ -34,20 +44,22 @@ class InstagifferUI(QtWidgets.QMainWindow):
         self.splitter.setChildrenCollapsible(False)
         self.setCentralWidget(self.splitter)
 
+        self.stack = IgfStack(self)
         stack_widget = QtWidgets.QWidget(self.splitter)
-        stack_widget.setMinimumWidth(150)
-        stack_widget.setMaximumWidth(250)
+        # stack_widget.setMinimumWidth(150)
+        # stack_widget.setMaximumWidth(250)
         stack_layout = QtWidgets.QVBoxLayout(stack_widget)
+
         stack_button_layout = QtWidgets.QHBoxLayout()
         stack_layout.addLayout(stack_button_layout)
         source_button = QtWidgets.QPushButton('Add Source')
         stack_button_layout.addWidget(source_button)
         text_button = QtWidgets.QPushButton('Add Text')
         stack_button_layout.addWidget(text_button)
-        self.stack = IgfStack(self)
-        stack_layout.addWidget(self.stack)
         source_button.clicked.connect(self.stack.add_source)
         text_button.clicked.connect(self.stack.add_text)
+
+        stack_layout.addWidget(self.stack)
 
         self.view_widget = QtWidgets.QWidget(self)
         self.view_layout = QtWidgets.QVBoxLayout(self.view_widget)
