@@ -25,24 +25,25 @@ class _BasePathRow(QtWidgets.QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
 
-        self.label_widget = QtWidgets.QLabel(label)
-        self.label_widget.setMinimumWidth(120)
+        if label:
+            self.label_widget = QtWidgets.QLabel(label)
+            self.label_widget.setMinimumWidth(120)
+            layout.addWidget(self.label_widget)
+
         self.edit = QtWidgets.QLineEdit()
         self.edit.setPlaceholderText(placeholder)
         self.edit.textChanged.connect(lambda _: self.path_changed.emit(self.path))
+        layout.addWidget(self.edit)
 
         self.browse_btn = QtWidgets.QPushButton('Browse...')
         self.browse_btn.setFixedWidth(80)
         self.browse_btn.clicked.connect(self._on_browse)
+        layout.addWidget(self.browse_btn)
 
         self.explore_btn = QtWidgets.QPushButton('Explore')
         self.explore_btn.setFixedWidth(64)
         self.explore_btn.setToolTip('Open in file manager')
         self.explore_btn.clicked.connect(self._on_explore)
-
-        layout.addWidget(self.label_widget)
-        layout.addWidget(self.edit)
-        layout.addWidget(self.browse_btn)
         layout.addWidget(self.explore_btn)
 
     def _on_browse(self) -> None:
@@ -84,7 +85,7 @@ class FileRow(_BasePathRow):
 
     def __init__(
         self,
-        label: str,
+        label: str = '',
         placeholder: str = '',
         file_filter: str = 'All files (*)',
         parent: QtWidgets.QWidget | None = None,
