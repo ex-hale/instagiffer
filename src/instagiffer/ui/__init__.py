@@ -46,8 +46,8 @@ class InstagifferUI(QtWidgets.QMainWindow):
 
         self.stack = IgfStack(self)
         stack_widget = QtWidgets.QWidget(self.splitter)
-        # stack_widget.setMinimumWidth(150)
-        # stack_widget.setMaximumWidth(250)
+        stack_widget.setMinimumWidth(450)
+        stack_widget.setMaximumWidth(550)
         stack_layout = QtWidgets.QVBoxLayout(stack_widget)
 
         stack_button_layout = QtWidgets.QHBoxLayout()

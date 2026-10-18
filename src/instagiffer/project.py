@@ -65,7 +65,7 @@ ENCODERS: dict[str, type[Encoder]] = {'gif': PilGifEncoder, 'mp4': FfmpegMp4Enco
 
 
 class IGProject:
-    def __init__(self, project_id: str, duration: int | float | None = None) -> None:
+    def __init__(self, project_id: str) -> None:
         if not isinstance(project_id, str):
             raise RuntimeError(f'Need string for {self.__class__.__name__} id!')
         self.name: str = ''
@@ -189,11 +189,11 @@ class IGProject:
                 self._render_context.progress_callback = progress_callback
             return self._render_context
 
-        frame_count = int(self.duration or DEFAULT_DURATION * self.output.fps)
+        frame_count = self.output.length * self.output.fps
         frame_length = 1.0 / self.output.fps
         frames = [
             Frame(n=i, length=frame_length, start=i * frame_length, end=(i + 1) * frame_length)
-            for i in range(frame_count)
+            for i in range(int(frame_count))
         ]
         self._render_context = RenderContext(frames=frames, output=self.output, ffmpeg=self.ffmpeg)
         if progress_callback is not None:

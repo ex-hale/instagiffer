@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import dataclasses
-import subprocess
-import sys
 from enum import Enum
-from pathlib import Path
 
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
-from instagiffer.project import IGLayer, SourceLayer, TextLayer
+from instagiffer.project import IGLayer, SourceLayer
 from instagiffer.ui.widget.a2slider import A2Slider
 from instagiffer.ui.widget.path import FileRow
+
+LABEL_FONT = QtGui.QFont()
+LABEL_FONT.setPointSize(14)
 
 
 class IgfStack(QtWidgets.QScrollArea):
@@ -20,11 +20,11 @@ class IgfStack(QtWidgets.QScrollArea):
 
     def __init__(self, parent):
         super().__init__(parent)
-        self.contents = QtWidgets.QWidget(self)
+        self.setWidgetResizable(True)
+        self.contents = QtWidgets.QWidget()
         self.v_layout = QtWidgets.QVBoxLayout(self.contents)
         self.v_layout.setContentsMargins(0, 0, 0, 0)
         self._layer_widgets: list[QtWidgets.QWidget] = []
-        # self.setCornerWidget(self.contents)
         self.setWidget(self.contents)
 
     def draw(self, layers: list[IGLayer]) -> None:
@@ -32,10 +32,17 @@ class IgfStack(QtWidgets.QScrollArea):
             widget.deleteLater()
             self._layer_widgets.remove(widget)
 
-        for layer in layers:
+        for layer in reversed(layers):
             widget = make_widget(layer, self)
             self._layer_widgets.append(widget)
             self.v_layout.addWidget(widget)
+        self._spacer = QtWidgets.QSpacerItem(
+            500,
+            0,
+            QtWidgets.QSizePolicy.Policy.Minimum,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+        self.v_layout.addSpacerItem(self._spacer)
 
     def add_source(self) -> None:
         self.add_source_requested.emit()
@@ -51,6 +58,9 @@ def make_widget(layer: IGLayer, parent: QtWidgets.QWidget) -> QtWidgets.QWidget:
     widget = QtWidgets.QWidget(parent)
     layout = QtWidgets.QFormLayout(widget)
     layout.setContentsMargins(0, 0, 0, 0)
+    label = QtWidgets.QLabel(layer.__class__.__name__)
+    label.setFont(LABEL_FONT)
+    layout.addRow(label, QtWidgets.QWidget())
     for key, value in dataclasses.asdict(layer).items():
         if isinstance(value, str):
             sub_widget = FileRow() if key.lower() == 'path' else QtWidgets.QLineEdit(value, widget)
@@ -71,10 +81,10 @@ def make_widget(layer: IGLayer, parent: QtWidgets.QWidget) -> QtWidgets.QWidget:
                     x_widget = QtWidgets.QDoubleSpinBox(widget)
                     sub_layout.addWidget(x_widget)
                     x_widget.setValue(x)
-            else:
-                value
-        else:
-            value
+        #     else:
+        #         value
+        # else:
+        #     value
 
         layout.addRow(key.title(), sub_widget)
 
