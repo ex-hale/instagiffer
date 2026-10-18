@@ -219,8 +219,11 @@ class ExtractionDemo(QtWidgets.QMainWindow):
         self.timeline.set_chunk_data(thumb_width, num_thumbs)
         timestamps = [nfo.duration_sec * i / num_thumbs for i in range(num_thumbs)]
 
-        self._thumb_thread = QtCore.QThread(self, objectName='thumb_thread')
-        self._worker = ThumbnailWorker(self.ffmpeg_row.path, self.video_row.path, timestamps, thumb_width, thumb_height)
+        self._thumb_thread = QtCore.QThread(self)
+        self._thumb_thread.setObjectName('thumb_thread')
+        self._worker = ThumbnailWorker(
+            self.ffmpeg_row.path, self.video_row.path, timestamps, thumb_width, thumb_height
+        )
         self._worker.moveToThread(self._thumb_thread)
         self._thumb_thread.started.connect(self._worker.run)
         self._worker.frame_ready.connect(self._on_thumb_progress)
@@ -304,7 +307,14 @@ class ThumbnailWorker(QtCore.QObject):
     finished = QtCore.Signal()
     error = QtCore.Signal(str)
 
-    def __init__(self, ffmpeg_path: Path, video_path: Path, timestamps: list[int | float], width: int, height: int):
+    def __init__(
+        self,
+        ffmpeg_path: Path,
+        video_path: Path,
+        timestamps: list[int | float],
+        width: int,
+        height: int,
+    ):
         super().__init__()
         self._video_path = video_path
         self._timestamps = timestamps
@@ -321,7 +331,9 @@ class ThumbnailWorker(QtCore.QObject):
         self.finished.emit()
 
     def _extract(self, index: int, timestamp: int | float):
-        chunk = self._wrapper.extract_single_frame(self._video_path, timestamp, self._width, self._height)
+        chunk = self._wrapper.extract_single_frame(
+            self._video_path, timestamp, self._width, self._height
+        )
         return index, chunk
 
 
