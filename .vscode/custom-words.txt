@@ -1,0 +1,11 @@
+desaturation
+EINVAL
+faststart
+LANCZOS
+libx
+MEDIANCUT
+movflags
+poethepoet
+rawvideo
+textbbox
+tobytes
