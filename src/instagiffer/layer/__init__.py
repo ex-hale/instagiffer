@@ -4,9 +4,9 @@ Root module for all Instagiffer Layers.
 Each Layer has a `draw` function that accepts a `RenderContext` and
 returns a new list of PIL Images.
 """
-import sys
 
 import dataclasses
+import sys
 from enum import Enum
 
 from instagiffer.layer import source, text
@@ -16,11 +16,7 @@ TextLayer = text.TextLayer
 
 type IGLayer = SourceLayer | TextLayer
 
-
-_LAYER_MAP = {
-    text.TYPE: text.from_dict,
-    source.TYPE: source.from_dict,
-}
+ALL: tuple[str, ...] = text.TYPE, source.TYPE
 
 
 def from_dicts(data: list[dict]) -> list[IGLayer]:
@@ -29,9 +25,16 @@ def from_dicts(data: list[dict]) -> list[IGLayer]:
     for layer_data in data:
         d = layer_data.copy()
         try:
-            layer_objects.append(_LAYER_MAP[d.pop('type')](d))
+            typ = d.pop('type')
         except KeyError as error:
-            raise KeyError(f'Unknown layer type! {error}') from error
+            raise KeyError(
+                f'Could not get type from layer data!\n {error = }\n data = {d}'
+            ) from error
+
+        try:
+            layer_objects.append(globals()[typ].from_dict(d))
+        except (KeyError, AttributeError) as error:
+            raise Exception(f'Error deserializing layer "{typ}"!\n {error = }') from error
     return layer_objects
 
 
