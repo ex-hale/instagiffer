@@ -1,6 +1,5 @@
 from PySide6 import QtCore, QtGui, QtWidgets
 
-import instagiffer
 import instagiffer.common
 
 # from instagiffer.config import Config, UiSettings
@@ -17,6 +16,10 @@ class InstagifferUI(QtWidgets.QMainWindow):
         super().__init__()
         self._project = None
         self._initial_draw_finished = False
+
+        self.setWindowTitle(f'Instagiffer - {instagiffer.__version__}')
+        self.setWindowIcon(QtGui.QIcon(str(instagiffer.common.ASSETS_DIR / 'instagiffer.ico')))
+
         self._setup_ui()
         self._setup_project()
 
@@ -37,9 +40,6 @@ class InstagifferUI(QtWidgets.QMainWindow):
             self.layer_list.set_layers(self._project.layers)
 
     def _setup_ui(self):
-        self.setWindowTitle(f'Instagiffer - {instagiffer.__version__}')
-        self.setWindowIcon(QtGui.QIcon(str(instagiffer.common.ASSETS_DIR / 'instagiffer.ico')))
-
         self.splitter = QtWidgets.QSplitter(self)
         self.splitter.setChildrenCollapsible(False)
         self.setCentralWidget(self.splitter)

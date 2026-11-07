@@ -112,12 +112,15 @@ def make_widget(layer: IGLayer, parent: QtWidgets.QWidget) -> QtWidgets.QWidget:
                 sub_layout.setContentsMargins(0, 0, 0, 0)
                 for x in value:
                     x_widget = QtWidgets.QDoubleSpinBox(widget)
+                    if len(value) >= 2:
+                        x_widget.setButtonSymbols(QtWidgets.QDoubleSpinBox.ButtonSymbols.NoButtons)
                     sub_layout.addWidget(x_widget)
                     x_widget.setValue(x)
-        #     else:
-        #         value
-        # else:
-        #     value
+                    x_widget.setMinimumWidth(20)
+            else:
+                raise NotImplementedError
+        else:
+            raise NotImplementedError
 
         layout.addRow(key.title(), sub_widget)
 
@@ -139,7 +142,7 @@ class _LayerListModel(QtCore.QAbstractListModel):
 
         if role == Qt.ItemDataRole.DisplayRole:
             return f'{layer.name} ({layer.type})' if layer.name != layer.type else layer.name
-        if role == Qt.ItemDataRole.UserRole:  # stash the layer object itself
+        if role == Qt.ItemDataRole.UserRole:
             return layer
         return None
 
@@ -150,46 +153,3 @@ class _LayerListModel(QtCore.QAbstractListModel):
 
     def layer_at(self, row: int):
         return self._layers[row] if 0 <= row < len(self._layers) else None
-
-
-class LayerPrefsPanel(QtWidgets.QScrollArea):
-    def __init__(self, parent: QtWidgets.QWidget | None = None):
-        super().__init__(parent)
-        self.setWidgetResizable(True)
-        self._layer: IGLayer | None = None
-
-        self._container = QtWidgets.QWidget()
-        outer = QtWidgets.QVBoxLayout(self._container)
-
-        self._header = QtWidgets.QLabel('No layer selected')
-        self._header.setStyleSheet('font-weight: bold;')
-        outer.addWidget(self._header)
-
-        self._form = QtWidgets.QFormLayout()
-        self._form.setFieldGrowthPolicy(
-            QtWidgets.QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
-        )
-        outer.addLayout(self._form)
-        outer.addStretch(1)
-
-        self.setWidget(self._container)
-
-    def set_layer(self, layer) -> None:
-        self._layer = layer
-        self._clear_form()
-
-        if layer is None:
-            self._header.setText('No layer selected')
-            return
-
-        type_name = type(layer).__name__
-        name = getattr(layer, 'name', None) or getattr(layer, 'title', None)
-        self._header.setText(f'{type_name}' + (f' — {name}' if name else ''))
-
-        # >>> your existing FormLayout generator goes here <<<
-        # self._form_builder(self._form, layer)
-
-    def _clear_form(self) -> None:
-        # removeRow deletes the row's widgets
-        while self._form.rowCount() > 0:
-            self._form.removeRow(0)

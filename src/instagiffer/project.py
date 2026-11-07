@@ -66,8 +66,9 @@ ENCODERS: dict[str, type[Encoder]] = {'gif': PilGifEncoder, 'mp4': FfmpegMp4Enco
 
 class IGProject:
     def __init__(self, project_id: str) -> None:
-        if not isinstance(project_id, str):
+        if not isinstance(project_id, str) or project_id == '':
             raise RuntimeError(f'Need string for {self.__class__.__name__} id!')
+
         self.name: str = ''
         """Display name of the project."""
         self.project_id: str = project_id
