@@ -32,7 +32,14 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 """
 
-__version__ = "2.0.0.alpha"
+# TODO: remove on release and hardcode it per deployment: ==================
+def _get_dev_version() -> str:
+    import tomllib
+    from pathlib import Path
+
+    cfg_path = Path(__file__).parent.parent.parent / 'pyproject.toml'
+    return tomllib.loads(cfg_path.read_text())['project']['version']
+__version__ = _get_dev_version()
 
 
 def main():
