@@ -3,7 +3,7 @@ from enum import Enum
 
 from PIL import Image, ImageDraw, ImageFont
 
-from instagiffer.render import RenderContext
+from instagiffer.render import IGLayer, RenderContext
 
 TYPE = 'text'
 
@@ -27,7 +27,7 @@ class VAlign(Enum):
 
 
 @dataclass
-class TextLayer:
+class TextLayer(IGLayer):
     """Overlay text. timing, animation etc. later."""
     text: str = ''
     font: str = ''

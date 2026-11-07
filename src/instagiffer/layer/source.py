@@ -1,5 +1,5 @@
 """
-The Instagiffer SouceLayer is has a video file as source for the resulting PIL Images.
+The Instagiffer SourceLayer is has a video file as source for the resulting PIL Images.
 """
 
 import hashlib
@@ -11,7 +11,7 @@ from PIL import Image
 
 from instagiffer.common import DOWNLOADS_DIR, FRAMES_CACHE_DIR
 from instagiffer.ffmpeg import FRAME_GLOB
-from instagiffer.render import RenderContext
+from instagiffer.render import IGLayer, RenderContext
 
 TYPE = 'source'
 
@@ -26,7 +26,7 @@ class Fit(Enum):
 
 
 @dataclass
-class SourceLayer:
+class SourceLayer(IGLayer):
     """Video or image source. trim, crop, speed etc. will live here later."""
 
     path: str = ''
@@ -52,7 +52,7 @@ class SourceLayer:
         images = []
         paths = sorted(self.frames_dir().glob(FRAME_GLOB))
         max_frame = len(paths) - 1
-        for i, frame in enumerate(render_context.frames):
+        for i, _ in enumerate(render_context.frames):
             # TODO layer on top of last `frame`
             img = Image.open(paths[min(i, max_frame)]).convert('RGB')
             if img.size != size:
@@ -72,7 +72,9 @@ class SourceLayer:
         return FRAMES_CACHE_DIR / self.frames_cache_key()
 
     def local_source_path(self) -> Path:
-        """Local path to the source file. Remote sources are expected to be downloaded here first."""
+        """Local path to the source file.
+        Remote sources are expected to be downloaded here first.
+        """
         if self.is_remote:
             url_hash = hashlib.sha256(self.path.encode()).hexdigest()[:16]
             stem = self.path.rstrip('/').rsplit('/', 1)[-1] or 'source'

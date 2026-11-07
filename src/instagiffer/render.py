@@ -1,3 +1,4 @@
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -19,6 +20,20 @@ class IGOutput:
 
     def get_blank(self) -> Image.Image:
         return Image.new('RGB', (self.width, self.height), (0, 0, 0))
+
+
+@dataclass
+class IGLayer:
+    name: str = ''
+    """User settable display name of the Layer."""
+    type: str = ''
+    """Type name of the Layer."""
+
+    def __post_init__(self) -> None:
+        self.name = self.__class__.__name__
+        self.type = sys.modules[self.__class__.__module__].TYPE
+
+    def draw(self, render_context: RenderContext) -> list[Image.Image]: ...
 
 
 @dataclass

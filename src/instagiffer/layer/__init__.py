@@ -10,11 +10,10 @@ import sys
 from enum import Enum
 
 from instagiffer.layer import source, text
+from instagiffer.render import IGLayer
 
 SourceLayer = source.SourceLayer
 TextLayer = text.TextLayer
-
-type IGLayer = SourceLayer | TextLayer
 
 ALL: tuple[str, ...] = text.TYPE, source.TYPE
 
@@ -46,6 +45,5 @@ def to_dicts(layers: list[IGLayer]) -> list[dict]:
         for key, value in data.items():
             if isinstance(value, Enum):
                 data[key] = value.value
-        data['type'] = sys.modules[layer.__class__.__module__].TYPE
         dicts.append(data)
     return dicts

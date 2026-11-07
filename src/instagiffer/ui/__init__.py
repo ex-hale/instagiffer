@@ -5,7 +5,7 @@ import instagiffer.common
 
 # from instagiffer.config import Config, UiSettings
 import instagiffer.project
-from instagiffer.ui.widget.stack import IgfStack
+from instagiffer.ui.widget.layer import LayerList, LayerPrefs
 from instagiffer.ui.widget.timeline import TimeLine
 from instagiffer.ui.widget.view import IgfView
 
@@ -34,7 +34,7 @@ class InstagifferUI(QtWidgets.QMainWindow):
     def _init_project_ui(self):
         """Cleanup ui and refill things with currently loaded project things."""
         if self._project is not None:
-            self.stack.draw(self._project.layers)
+            self.layer_list.set_layers(self._project.layers)
 
     def _setup_ui(self):
         self.setWindowTitle(f'Instagiffer - {instagiffer.__version__}')
@@ -44,22 +44,26 @@ class InstagifferUI(QtWidgets.QMainWindow):
         self.splitter.setChildrenCollapsible(False)
         self.setCentralWidget(self.splitter)
 
-        self.stack = IgfStack(self)
+        self.layer_list = LayerList(self)
         stack_widget = QtWidgets.QWidget(self.splitter)
         stack_widget.setMinimumWidth(450)
         stack_widget.setMaximumWidth(550)
         stack_layout = QtWidgets.QVBoxLayout(stack_widget)
 
-        stack_button_layout = QtWidgets.QHBoxLayout()
-        stack_layout.addLayout(stack_button_layout)
-        source_button = QtWidgets.QPushButton('Add Source')
-        stack_button_layout.addWidget(source_button)
-        text_button = QtWidgets.QPushButton('Add Text')
-        stack_button_layout.addWidget(text_button)
-        source_button.clicked.connect(self.stack.add_source)
-        text_button.clicked.connect(self.stack.add_text)
+        self.layer_prefs = LayerPrefs(self)
+        self.layer_list.layer_selected.connect(self.layer_prefs.draw)
 
-        stack_layout.addWidget(self.stack)
+        # stack_button_layout = QtWidgets.QHBoxLayout()
+        # stack_layout.addLayout(stack_button_layout)
+        # source_button = QtWidgets.QPushButton('Add Source')
+        # stack_button_layout.addWidget(source_button)
+        # text_button = QtWidgets.QPushButton('Add Text')
+        # stack_button_layout.addWidget(text_button)
+        # source_button.clicked.connect(self.stack.add_source)
+        # text_button.clicked.connect(self.stack.add_text)
+
+        stack_layout.addWidget(self.layer_list)
+        stack_layout.addWidget(self.layer_prefs)
 
         self.view_widget = QtWidgets.QWidget(self)
         self.view_layout = QtWidgets.QVBoxLayout(self.view_widget)
