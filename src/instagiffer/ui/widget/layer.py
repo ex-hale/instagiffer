@@ -27,12 +27,6 @@ class LayerList(QtWidgets.QWidget):
         self.list_view.setEditTriggers(QtWidgets.QListView.EditTrigger.NoEditTriggers)
         self.list_view.setSelectionMode(QtWidgets.QListView.SelectionMode.SingleSelection)
 
-        # splitter = QtWidgets.QSplitter(Qt.Orientation.Horizontal)
-        # splitter.addWidget(self.list_view)
-        # splitter.setStretchFactor(0, 1)
-        # splitter.setStretchFactor(1, 2)
-        # splitter.setSizes([220, 480])
-
         layout = QtWidgets.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.list_view)
@@ -46,10 +40,13 @@ class LayerList(QtWidgets.QWidget):
         layer = self.model.data(current, Qt.ItemDataRole.UserRole) if current.isValid() else None
         self.layer_selected.emit(layer)
 
-    def set_layers(self, layers: list[IGLayer]) -> None:
+    def set_layers(self, layers: list[IGLayer] | None) -> None:
         """Call this whenever the underlying layer list changes."""
         current = self.current_layer()
         self.model.set_layers(layers)
+        if layers is None:
+            return
+
         if current in layers:
             self.list_view.setCurrentIndex(self.model.index(layers.index(current)))
         elif layers:
@@ -146,9 +143,12 @@ class _LayerListModel(QtCore.QAbstractListModel):
             return layer
         return None
 
-    def set_layers(self, layers: list) -> None:
+    def set_layers(self, layers: list | None) -> None:
         self.beginResetModel()
-        self._layers = list(reversed(layers))
+        if not layers:
+            self._layers.clear()
+        else:
+            self._layers = list(reversed(layers))
         self.endResetModel()
 
     def layer_at(self, row: int):
