@@ -66,7 +66,7 @@ class LayerPrefs(QtWidgets.QScrollArea):
         self.setWidgetResizable(True)
         self.contents = QtWidgets.QWidget()
         self.v_layout = QtWidgets.QVBoxLayout(self.contents)
-        self.v_layout.setContentsMargins(0, 0, 0, 0)
+        self.v_layout.setContentsMargins(5, 5, 5, 5)
         self._layer_widget: QtWidgets.QWidget | None = None
         self._spacer = QtWidgets.QSpacerItem(
             500,
@@ -92,6 +92,8 @@ def make_widget(layer: IGLayer, parent: QtWidgets.QWidget) -> QtWidgets.QWidget:
     label.setFont(LABEL_FONT)
     layout.addRow(label, QtWidgets.QWidget())
     for key, value in dataclasses.asdict(layer).items():
+        if key in ('name', 'type'):
+            continue
         if isinstance(value, str):
             sub_widget = FileRow() if key.lower() == 'path' else QtWidgets.QLineEdit(value, widget)
         elif isinstance(value, float):
