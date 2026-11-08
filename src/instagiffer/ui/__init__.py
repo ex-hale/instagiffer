@@ -36,38 +36,29 @@ class InstagifferUI(QtWidgets.QMainWindow):
 
     def _init_project_ui(self):
         """Cleanup ui and refill things with currently loaded project things."""
-        if self._project is not None:
-            self.layer_list.set_layers(self._project.layers)
+        if self._project is None:
+            self.layer_list.set_layers(None)
+            return
+
+        self.layer_list.set_layers(self._project.layers)
 
     def _setup_ui(self):
-        self.splitter = QtWidgets.QSplitter(self)
-        self.splitter.setChildrenCollapsible(False)
-        self.setCentralWidget(self.splitter)
+        self.h_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Horizontal)
+        self.h_splitter.setChildrenCollapsible(False)
+        self.setCentralWidget(self.h_splitter)
 
+        self.v_splitter = QtWidgets.QSplitter(QtCore.Qt.Orientation.Vertical)
+        self.h_splitter.addWidget(self.v_splitter)
         self.layer_list = LayerList(self)
-        stack_widget = QtWidgets.QWidget(self.splitter)
-        stack_widget.setMinimumWidth(450)
-        stack_widget.setMaximumWidth(550)
-        stack_layout = QtWidgets.QVBoxLayout(stack_widget)
 
         self.layer_prefs = LayerPrefs(self)
         self.layer_list.layer_selected.connect(self.layer_prefs.draw)
-
-        # stack_button_layout = QtWidgets.QHBoxLayout()
-        # stack_layout.addLayout(stack_button_layout)
-        # source_button = QtWidgets.QPushButton('Add Source')
-        # stack_button_layout.addWidget(source_button)
-        # text_button = QtWidgets.QPushButton('Add Text')
-        # stack_button_layout.addWidget(text_button)
-        # source_button.clicked.connect(self.stack.add_source)
-        # text_button.clicked.connect(self.stack.add_text)
-
-        stack_layout.addWidget(self.layer_list)
-        stack_layout.addWidget(self.layer_prefs)
+        self.v_splitter.addWidget(self.layer_list)
+        self.v_splitter.addWidget(self.layer_prefs)
 
         self.view_widget = QtWidgets.QWidget(self)
         self.view_layout = QtWidgets.QVBoxLayout(self.view_widget)
-        self.splitter.addWidget(self.view_widget)
+        self.h_splitter.addWidget(self.view_widget)
 
         self.view = IgfView(self)
         self.timeline = TimeLine(self)
@@ -77,9 +68,9 @@ class InstagifferUI(QtWidgets.QMainWindow):
     def _restore_ui(self):
         """WIP - Restore window position and size or initialize these if unset."""
         # if not hasattr(UiSettings, 'splitter_size'):
-        self._init_window_geometry()
+        self._init_window()
 
-    def _init_window_geometry(self):
+    def _init_window(self):
         geometry = self.geometry()
         scale = 1.0
         geometry.setSize(
@@ -102,6 +93,9 @@ class InstagifferUI(QtWidgets.QMainWindow):
 
         geometry.moveCenter(screen.geometry().center())
         self.setGeometry(geometry)
+
+        self.h_splitter.setSizes([int(DEFAULT_WIN_SIZE[0] * .333), int(DEFAULT_WIN_SIZE[0] * .666)])
+        self.v_splitter.setSizes([int(DEFAULT_WIN_SIZE[1] * .25), int(DEFAULT_WIN_SIZE[1] * .75)])
 
     def showEvent(self, event):
         if self._initial_draw_finished:
