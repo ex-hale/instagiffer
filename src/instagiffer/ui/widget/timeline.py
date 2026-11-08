@@ -64,7 +64,7 @@ class TimeLine(QtWidgets.QWidget):
             chunk = self._chunks.get(i)
             if chunk is not None:
                 p.drawPixmap(QtCore.QRectF(x, 0, cw, h), chunk, QtCore.QRectF(chunk.rect()))
-            else:  # not loaded yet
+            else:
                 p.fillRect(QtCore.QRectF(x, 0, cw, h), QtGui.QColor('#333333'))
         p.end()
         self._strip = strip
