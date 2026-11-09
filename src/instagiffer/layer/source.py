@@ -29,8 +29,9 @@ class Fit(Enum):
 class SourceLayer(IGLayer):
     """Video or image source. trim, crop, speed etc. will live here later."""
 
-    path: str = ''
     fps: float = 10.0
+    url: str = ''
+    """File path or URL to the original source."""
     start_time: float = 0.0
     duration: float = 5.0
     scale: float = 1.0
@@ -62,10 +63,10 @@ class SourceLayer(IGLayer):
 
     @property
     def is_remote(self) -> bool:
-        return self.path.startswith(('http://', 'https://'))
+        return self.url.startswith(('http://', 'https://'))
 
     def frames_cache_key(self) -> str:
-        key = f'{self.path}|{self.fps}|{self.start_time}|{self.duration}|{self.scale}'
+        key = f'{self.url}|{self.fps}|{self.start_time}|{self.duration}|{self.scale}'
         return hashlib.sha256(key.encode()).hexdigest()[:16]
 
     def frames_dir(self) -> Path:
@@ -76,10 +77,10 @@ class SourceLayer(IGLayer):
         Remote sources are expected to be downloaded here first.
         """
         if self.is_remote:
-            url_hash = hashlib.sha256(self.path.encode()).hexdigest()[:16]
-            stem = self.path.rstrip('/').rsplit('/', 1)[-1] or 'source'
+            url_hash = hashlib.sha256(self.url.encode()).hexdigest()[:16]
+            stem = self.url.rstrip('/').rsplit('/', 1)[-1] or 'source'
             return DOWNLOADS_DIR / url_hash / stem
-        return Path(self.path)
+        return Path(self.url)
 
     def frames_are_cached(self) -> bool:
         d = self.frames_dir()

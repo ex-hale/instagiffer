@@ -6,8 +6,8 @@ returns a new list of PIL Images.
 """
 
 import dataclasses
-import sys
 from enum import Enum
+from pathlib import Path
 
 from instagiffer.layer import source, text
 from instagiffer.render import IGLayer
@@ -45,5 +45,7 @@ def to_dicts(layers: list[IGLayer]) -> list[dict]:
         for key, value in data.items():
             if isinstance(value, Enum):
                 data[key] = value.value
+            elif isinstance(value, Path):
+                data[key] = str(value)
         dicts.append(data)
     return dicts

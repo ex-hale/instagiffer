@@ -123,8 +123,7 @@ class IGProject:
             json.dump(data, f, indent=2)
 
     def add_source(self, path: str | Path, **kwargs) -> SourceLayer:
-        string_path = path if isinstance(path, str) else str(path)
-        layer = SourceLayer(string_path, **kwargs)
+        layer = SourceLayer(url=str(path), **kwargs)
         self.layers.append(layer)
         return layer
 
