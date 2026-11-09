@@ -7,7 +7,7 @@ from instagiffer.render import IGOutput
 
 
 @pytest.fixture
-def project(tmp_path, monkeypatch):
+def project(tmp_path, monkeypatch) -> IGProject:
     """A fully configured project whose save directory is redirected to tmp_path."""
     import instagiffer.project as proj_mod
 
@@ -39,12 +39,12 @@ def project(tmp_path, monkeypatch):
     return p
 
 
-def test_save_creates_file(project):
+def test_save_creates_file(project: IGProject):
     project.save()
     assert (project.project_dir / PROJECT_FILE_NAME).is_file()
 
 
-def test_roundtrip_output(project):
+def test_roundtrip_output(project: IGProject):
     project.save()
     loaded = IGProject.load(project.project_id)
 
@@ -56,20 +56,21 @@ def test_roundtrip_output(project):
     assert loaded.output.format == project.output.format
 
 
-def test_roundtrip_layer_count(project):
+def test_roundtrip_layer_count(project: IGProject):
     project.save()
     loaded = IGProject.load(project.project_id)
     assert len(loaded.layers) == len(project.layers)
 
 
-def test_roundtrip_source_layer(project):
+def test_roundtrip_source_layer(project: IGProject):
     project.save()
     loaded = IGProject.load(project.project_id)
 
     orig = project.layers[0]
     back = loaded.layers[0]
     assert isinstance(back, source.SourceLayer)
-    assert back.path == orig.path
+    assert isinstance(orig, source.SourceLayer)
+    assert back.url == orig.url
     assert back.fps == orig.fps
     assert back.start_time == orig.start_time
     assert back.duration == orig.duration
@@ -77,13 +78,14 @@ def test_roundtrip_source_layer(project):
     assert back.fit == orig.fit
 
 
-def test_roundtrip_text_layer(project):
+def test_roundtrip_text_layer(project: IGProject):
     project.save()
     loaded = IGProject.load(project.project_id)
 
     orig = project.layers[1]
     back = loaded.layers[1]
     assert isinstance(back, text.TextLayer)
+    assert isinstance(orig, text.TextLayer)
     assert back.text == orig.text
     assert back.font == orig.font
     assert back.size == orig.size
