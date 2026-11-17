@@ -16,7 +16,8 @@ class IGOutput:
     optimize: bool = True
     loop: int = 0
     format: str = 'gif'
-    length: int | float = 3.0
+    duration: int | float = 3.0
+    """Length of the resulting video in seconds."""
 
     def get_blank(self) -> Image.Image:
         return Image.new('RGB', (self.width, self.height), (0, 0, 0))
@@ -40,11 +41,11 @@ class IGLayer:
 class Frame:
     n: int
     """Frame number. Starts at 0."""
-    length: float
+    duration: float
     """Frame duration in seconds."""
-    start: float
+    start_time: float
     """Frame start time in seconds."""
-    end: float
+    end_time: float
     """Frame end time in seconds."""
     image: Image.Image | None = None
     """Frame contents."""

@@ -122,8 +122,8 @@ class IGProject:
         with open(self.project_dir / PROJECT_FILE_NAME, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2)
 
-    def add_source(self, path: str | Path, **kwargs) -> SourceLayer:
-        layer = SourceLayer(url=str(path), **kwargs)
+    def add_source(self, url: str | Path, **kwargs) -> SourceLayer:
+        layer = SourceLayer(url=str(url), **kwargs)
         self.layers.append(layer)
         return layer
 
@@ -189,10 +189,10 @@ class IGProject:
                 self._render_context.progress_callback = progress_callback
             return self._render_context
 
-        frame_count = self.output.length * self.output.fps
+        frame_count = self.output.duration * self.output.fps
         frame_length = 1.0 / self.output.fps
         frames = [
-            Frame(n=i, length=frame_length, start=i * frame_length, end=(i + 1) * frame_length)
+            Frame(i, frame_length, i * frame_length, (i + 1) * frame_length)
             for i in range(int(frame_count))
         ]
         self._render_context = RenderContext(frames=frames, output=self.output, ffmpeg=self.ffmpeg)
@@ -266,8 +266,8 @@ if __name__ == '__main__':
 
     p: IGProject = IGProject.new()
     p.output = IGOutput(width=480, height=270, fps=10.0, format='mp4')
-    p.add_source(src, fps=3.0, start_time=0.0, duration=3.0)
-    p.add_text('Hello, Linda!', color='#ff8080', size=42, font='comic', outline_size=6)
+    p.add_source(src, fps=2, start_time=0.5, duration=3.0)
+    p.add_text('HallohA, Welt!', color='#ff8080', size=42, font='comic', outline_size=6)
     p.save()
 
     result = p.render(out, progress_callback=lambda pct: print(f'\r{pct:.0%}', end='', flush=True))
