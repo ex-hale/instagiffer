@@ -15,8 +15,8 @@ from instagiffer.common import DEPS_DIR, IM_A_WIN
 
 log = logging.getLogger(__name__)
 
-# Output frame filename pattern - 1-indexed, zero-padded to 4 digits
 FRAME_PATTERN = 'image%04d.png'
+"""Output frame filename pattern - 1-indexed, zero-padded to 4 digits"""
 FRAME_GLOB = 'image*.png'
 _EXT = '' if not IM_A_WIN else '.exe'
 FFMPEG = 'ffmpeg'
@@ -25,6 +25,7 @@ FFMPEG_EXE = f'{FFMPEG}{_EXT}'
 FFPROBE_EXE = f'{FFPROBE}{_EXT}'
 EXECUTABLES = FFMPEG_EXE, FFPROBE_EXE
 EINVAL = 4294967274
+"""FFMpeg Invalid Argument Error code"""
 _NOT_FOUND_MSG = (
     '{} not found in environment PATH!\n'
     'Use `uv run poe deps` to get the executables locally or\n'
@@ -131,7 +132,7 @@ class FFmWrap:
         self,
         video_path: str | Path,
         output_dir: str | Path,
-        fps: float,
+        fps: float | None = None,
         start_time: float = 0.0,
         duration: float = 5.0,
         scale: float = 1.0,
@@ -157,6 +158,9 @@ class FFmWrap:
         """
         video_path, output_dir = self._check_paths(video_path, output_dir)
 
+        if fps is None:
+            fps = self.get_video_info(video_path).fps
+
         cmd: list[str] = [str(self.ffmpeg), '-v', 'quiet', '-stats', '-progress', 'pipe:1']
         # -ss before -i: fast keyframe seek (accurate enough for GIF use)
         if start_time > 0:
@@ -173,13 +177,12 @@ class FFmWrap:
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         assert process.stdout is not None
 
-        total_frames = fps * duration
         if progress_callback:
             for line in process.stdout:
                 if not line.startswith('frame='):
                     continue
                 this_frame = int(line[6:].rstrip())
-                progress_callback(this_frame / total_frames)
+                progress_callback(this_frame / fps * duration)
 
         process.wait()
 
@@ -243,7 +246,7 @@ class FFmWrap:
             index += 1
         errors = proc.stderr.read()
         if errors:
-            print(f'errors: {errors}')
+            print(f'{errors = }')
 
     def extract_single_frame(
         self,
