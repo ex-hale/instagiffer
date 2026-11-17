@@ -29,16 +29,23 @@ class Fit(Enum):
 class SourceLayer(IGLayer):
     """Video or image source. trim, crop, speed etc. will live here later."""
 
-    fps: float = 10.0
     url: str = ''
     """File path or URL to the original source."""
+    fps: float | None = None
+    """Extraction frame rate to get images from the source. Original rate by default."""
     start_time: float = 0.0
+    """Extraction offset time. Extract from first frame by default."""
     duration: float = 5.0
+    """Extraction length. Low by default. We're NOT getting 'All frames' by default!"""
     scale: float = 1.0
+    """Extraction scaling. Zoom so to say. 1 by default i.e. no change in scale."""
     fit: Fit = Fit.crop
     """Image fitting options enum: `crop` or `contain`."""
 
     def draw(self, render_context: RenderContext) -> list[Image.Image]:
+        """Render layer frames arranged into given context,
+        respecting size and frame rates.
+        """
         if not self.frames_are_cached():
             render_context.ffmpeg.extract_frames(
                 self.local_source_path(),
@@ -50,12 +57,18 @@ class SourceLayer(IGLayer):
                 progress_callback=render_context.progress_callback,
             )
         size = (render_context.output.width, render_context.output.height)
+        fps = (
+            self.fps
+            if self.fps is not None
+            else render_context.ffmpeg.get_video_info(self.local_source_path()).fps
+        )
+
         images = []
         paths = sorted(self.frames_dir().glob(FRAME_GLOB))
         max_frame = len(paths) - 1
-        for i, _ in enumerate(render_context.frames):
-            # TODO layer on top of last `frame`
-            img = Image.open(paths[min(i, max_frame)]).convert('RGB')
+        for frame in render_context.frames:
+            # TODO: layer on top of last `frame.image`
+            img = Image.open(paths[min(int(frame.start_time * fps), max_frame)]).convert('RGB')
             if img.size != size:
                 img = fit_frame(img, size, self.fit)
             images.append(img)
