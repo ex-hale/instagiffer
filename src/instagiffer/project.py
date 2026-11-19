@@ -266,7 +266,7 @@ if __name__ == '__main__':
 
     p: IGProject = IGProject.new()
     p.output = IGOutput(width=480, height=270, fps=10.0, format='mp4')
-    p.add_source(src, fps=2, start_time=0.5, duration=3.0)
+    p.add_source(src, start_time=0.5, duration=3.0)
     p.add_text('HallohA, Welt!', color='#ff8080', size=42, font='comic', outline_size=6)
     p.save()
 
