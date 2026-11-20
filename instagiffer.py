@@ -1,5 +1,4 @@
-# /usr/bin/env python
-# -*- coding: utf-8 -*-
+#! /usr/bin/env python
 #
 # Copyright (c) 2013-2026 Exhale Software Inc.
 # All rights reserved.
@@ -33,7 +32,7 @@
 
 """instagiffer.py: The easy way to make GIFs"""
 
-__version__ = "1.79.0"
+__version__ = "1.79.1"
 __author__ = "Justin Todd"
 __copyright__ = "Copyright 2013-2026, Exhale Software Inc."
 __maintainer__ = "Justin Todd"
@@ -142,7 +141,7 @@ def OpenFileWithDefaultApp(fileName: str) -> None:
     """Open a file in the application associated with this file extension"""
     try:
         if ImAWSL():
-            subprocess.Popen(f'powershell.exe -c "Start-Process \'{fileName}\'"', shell=True)
+            subprocess.Popen(f"powershell.exe -c \"Start-Process '{fileName}'\"", shell=True)
 
         elif IsUrl(fileName):
             import webbrowser
@@ -159,10 +158,7 @@ def OpenFileWithDefaultApp(fileName: str) -> None:
     except OSError:
         report = traceback.format_exc().strip()
         logging.error(report)
-        tkMessageBox.showinfo(
-            "Unable to open!",
-            f"I wasn't allowed to open '{fileName}'. You will need to perform this task manually!"
-        )
+        tkMessageBox.showinfo("Unable to open!", f"I wasn't allowed to open '{fileName}'. You will need to perform this task manually!")
 
 
 def GetFileExtension(filename):
@@ -4353,6 +4349,7 @@ class GifApp:
 
     def GenerateBugReport(self):
         import urllib.parse
+
         try:
             with open(GetLogPath()) as file_object:
                 # only last 3000 chars to stay under URL limits
@@ -4363,10 +4360,12 @@ class GifApp:
         title = "Bug report"
         body = f"**Describe the bug**\n\n\n**Log**\n```\n{log_content}\n```"
 
-        url = "https://github.com/ex-hale/instagiffer/issues/new?" + urllib.parse.urlencode({
-            "title": title,
-            "body": body,
-        })
+        url = "https://github.com/ex-hale/instagiffer/issues/new?" + urllib.parse.urlencode(
+            {
+                "title": title,
+                "body": body,
+            }
+        )
         OpenFileWithDefaultApp(url)
 
     def OpenFAQ(self):
