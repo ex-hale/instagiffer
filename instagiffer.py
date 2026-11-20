@@ -32,7 +32,7 @@
 
 """instagiffer.py: The easy way to make GIFs"""
 
-__version__ = "1.79.1"
+__version__ = "1.79.2"
 __author__ = "Justin Todd"
 __copyright__ = "Copyright 2013-2026, Exhale Software Inc."
 __maintainer__ = "Justin Todd"
