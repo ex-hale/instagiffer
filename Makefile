@@ -100,21 +100,23 @@ APP_PATH		:= dist/Instagiffer.app
 INSTALL_PATH	:= /Applications/Instagiffer.app
 DIST_ARTIFACT	:= dist/Instagiffer-$(VERSION).dmg
 MAGICK_OUT		:= build/imagemagick/out
-FFMPEG_URL		:= https://evermeet.cx/ffmpeg/getrelease/zip
+FFMPEG_OUT		:= build/ffmpeg/out
 YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
 YTDLP			:= deps/mac/yt-dlp
 
 deps: $(DEPS_STAMP)
 $(DEPS_STAMP): $(VENV_STAMP)
 	@command -v brew >/dev/null || (echo "Error: Homebrew is required. See https://brew.sh" && exit 1)
-	brew bundle --no-lock
+	HOMEBREW_BUNDLE_NO_LOCK=1 brew bundle
 	$(PIP) install -e ".[build-mac]"
 	$(MAKE) -f imagemagick.mk
+	$(MAKE) -f ffmpeg.mk
 	@mkdir -p deps/mac
 	@cp -R $(MAGICK_OUT)/* deps/mac/
-	@echo "Downloading ffmpeg from $(FFMPEG_URL) ..."
-	@[ -f deps/mac/ffmpeg ]   || (curl -fSL -o deps/mac/ffmpeg.zip "$(FFMPEG_URL)" && unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip && chmod +x deps/mac/ffmpeg)
-	@echo "Downloading yt-dlp from $(YTDLP_URL) ..."
+	@cp -R $(FFMPEG_OUT)/* deps/mac/
+# 	@echo "Downloading ffmpeg from $(FFMPEG_URL) ..."
+# 	@[ -f deps/mac/ffmpeg ]   || (curl -fSL -o deps/mac/ffmpeg.zip "$(FFMPEG_URL)" && unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip && chmod +x deps/mac/ffmpeg)
+# 	@echo "Downloading yt-dlp from $(YTDLP_URL) ..."
 	@[ -f deps/mac/yt-dlp ]   || (curl -fSL -o deps/mac/yt-dlp "$(YTDLP_URL)" && chmod +x deps/mac/yt-dlp)
 	@[ -f deps/mac/gifsicle ] || cp "$$(which gifsicle)" deps/mac/gifsicle
 	@touch $@
