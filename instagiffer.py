@@ -1680,6 +1680,9 @@ class AnimatedGif:
             + '"'
         )
 
+        deps_path = os.path.abspath(self.conf.GetParam("paths", "deps"))
+        if deps_path not in os.environ['PATH']:
+            os.environ['PATH'] += os.path.pathsep + deps_path
         stdout, stderr = RunProcess(cmdVideoDownload, self.callback, True)
 
         if not os.path.exists(downloadFileName):

@@ -103,6 +103,13 @@ MAGICK_OUT		:= build/imagemagick/out
 FFMPEG_OUT		:= build/ffmpeg/out
 YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
 YTDLP			:= deps/mac/yt-dlp
+DENO_ARCH 		:= $(shell uname -m | sed 's/arm64/aarch64/')
+DENO_URL 		:= https://github.com/denoland/deno/releases/latest/download/deno-${DENO_ARCH}-apple-darwin.zip
+# ifeq (${shell uname -m},arm64)
+# DENO_URL := https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip
+# else
+# DENO_URL := https://github.com/denoland/deno/releases/latest/download/deno-x86_64-apple-darwin.zip
+# endif
 
 deps: $(DEPS_STAMP)
 $(DEPS_STAMP): $(VENV_STAMP)
@@ -114,13 +121,12 @@ $(DEPS_STAMP): $(VENV_STAMP)
 	@mkdir -p deps/mac
 	@cp -R $(MAGICK_OUT)/* deps/mac/
 	@cp -R $(FFMPEG_OUT)/* deps/mac/
-# 	@echo "Downloading ffmpeg from $(FFMPEG_URL) ..."
-# 	@[ -f deps/mac/ffmpeg ]   || (curl -fSL -o deps/mac/ffmpeg.zip "$(FFMPEG_URL)" && unzip -o deps/mac/ffmpeg.zip -d deps/mac/ && rm deps/mac/ffmpeg.zip && chmod +x deps/mac/ffmpeg)
-# 	@echo "Downloading yt-dlp from $(YTDLP_URL) ..."
 	@[ -f deps/mac/yt-dlp ]   || (curl -fSL -o deps/mac/yt-dlp "$(YTDLP_URL)" && chmod +x deps/mac/yt-dlp)
 	@[ -f deps/mac/gifsicle ] || cp "$$(which gifsicle)" deps/mac/gifsicle
+	@[ -f deps/mac/deno ] || (curl -fSL -o deps/mac/deno.zip "$(DENO_URL)" && unzip -o deps/mac/deno.zip -d deps/mac/ && rm deps/mac/deno.zip && chmod +x deps/mac/deno)
 	@touch $@
 	@echo "macOS dependencies ready in deps/mac/"
+
 
 $(DIST_STAMP): $(VENV_STAMP) instagiffer.py main.py instagiffer.conf $(DEPS_STAMP)
 	@echo "Building Mac release with PyInstaller ..."
