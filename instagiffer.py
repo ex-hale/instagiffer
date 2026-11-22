@@ -85,9 +85,6 @@ if sys.platform == "win32":
     # Windows uses the PIL ImageGrab module for screen capture
     from PIL import ImageGrab
 
-# Return true if running on a MAC
-#
-
 
 def ImAMac():
     return sys.platform == "darwin"
@@ -105,6 +102,15 @@ def ImAWSL():
             return "microsoft" in version and "wsl" in version
     except OSError:
         return False
+
+
+QUALITY_MAP = {
+    "Low":     "bv*[height<=240][ext=mp4]/bv*[height<=240]/bv*",
+    "Medium":  "bv*[height<=360][ext=mp4]/bv*[height<=360]/bv*",
+    "High":    "bv*[height<=720][ext=mp4]/bv*[height<=720]/bv*",
+    "Highest": "bv*[height<=1080][ext=mp4]/bv*[height<=1080]/bv*",
+    "None":    None,
+}
 
 
 def GetDisplayScaleFactor():
@@ -698,7 +704,7 @@ class AnimatedGif:
         self.videoHeight = 0
         self.videoLength = None
         self.videoFps = 0.0
-        self.videoPath = None
+        self.videoPath: str | None = None
         self.videoFileName = ""
         self.imageSequence = []
         self.imageSequenceCropParams = None  # At the moment, used for mac screen grab only. When the image sequence is "extracted" we sneak in the crop operation instead of resizing
@@ -1628,7 +1634,7 @@ class AnimatedGif:
         return self.videoFileName
 
     def SaveOriginalVideoAs(self, newFileName):
-        if len(self.videoPath):
+        if self.videoPath:
             self.callback(False)
             shutil.copy(self.videoPath, newFileName)
         self.callback(True)
@@ -1636,54 +1642,25 @@ class AnimatedGif:
     def DownloadVideo(self, url):
         downloadFileName = self.downloadDir + os.sep + "videofile_" + str(uuid.uuid4())
 
-        maxHeight = 360
-
-        if self.downloadQuality == "Low":
-            maxHeight = 240
-        elif self.downloadQuality == "Medium":
-            maxHeight = 360
-        elif self.downloadQuality == "High":
-            maxHeight = 720
-        elif self.downloadQuality == "Highest":
-            maxHeight = 1080
-
         # Make sure they don't download a playlist
         if url.lower().find("youtube") != -1 and url.find("&list=") != -1:
             logging.info("Youtube playlist detected. Removing playlist component from URL")
             url, _sep, _extra = url.partition("&list=")
 
-        # Build format str
-        fmtStr = "[height<=?" + str(maxHeight) + "] "
-        if self.downloadQuality == "Highest":
-            fmtStr = "bestvideo"
+        fmt = QUALITY_MAP.get(self.downloadQuality)
+        fmtStr = f" --format {fmt}" if fmt else ""
 
-        fmtStr = " --format " + fmtStr
-
-        # Don't specify
-        if self.downloadQuality == "None":
-            fmtStr = ""
-
-        cmdVideoDownload = (
-            '"'
-            + self.conf.GetParam("paths", "youtubedl")
-            + '"'
-            + " -v -k "
-            + " --ffmpeg-location /dont/use "
-            + " --no-check-certificate "
-            + " --newline "
-            + fmtStr
-            + ' -o "'
-            + downloadFileName
-            + '"'
-            + '   "'
-            + url
-            + '"'
+        cmd = (
+            f'"{self.conf.GetParam("paths", "youtubedl")}"'
+            " -v -k "
+            " --ffmpeg-location /dont/use "
+            " --newline "
+            f"{fmtStr}"
+            f' --js-runtimes deno:{self.conf.GetParam("paths", "deno")}'
+            f' -o "{downloadFileName}" '
+            f'"{url}"'
         )
-
-        deps_path = os.path.abspath(self.conf.GetParam("paths", "deps"))
-        if deps_path not in os.environ['PATH']:
-            os.environ['PATH'] += os.path.pathsep + deps_path
-        stdout, stderr = RunProcess(cmdVideoDownload, self.callback, True)
+        stdout, stderr = RunProcess(cmd, self.callback, True)
 
         if not os.path.exists(downloadFileName):
             # Video didn't download. Let's see what happened
@@ -1711,7 +1688,7 @@ class AnimatedGif:
         return downloadFileName
 
     def SourceIsVideo(self):
-        if self.videoPath == None and len(self.imageSequence) <= 0:
+        if self.videoPath is None and len(self.imageSequence) <= 0:
             self.FatalError("Something is wrong. No video, and no image sequence!")
         return self.videoPath is not None
 
