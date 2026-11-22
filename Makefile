@@ -1,14 +1,14 @@
 VENV := .venv
 
 ifeq ($(OS),Windows_NT)
-	PLATFORM := windows
+	PLATFORM	:= windows
 	SHELL		:= C:/Program Files/Git/usr/bin/sh.exe
 	export PATH	:= C:/Program Files/Git/usr/bin:$(PATH)
 	PYTHON		:= $(VENV)/Scripts/python
 	PYTHON_CMD	:= py -3.13
 	VENV_STAMP	:= $(VENV)/Scripts/activate
 else
-	PLATFORM := $(shell uname -s | tr '[:upper:]' '[:lower:]')
+	PLATFORM	:= $(shell uname -s | tr '[:upper:]' '[:lower:]')
 	PYTHON		:= $(VENV)/bin/python3
 	PYTHON_CMD	:= python3
 	VENV_STAMP	:= $(VENV)/bin/activate
@@ -22,6 +22,13 @@ DIST_STAMP	:= build/.dist-stamp
 TEST_VIDEO_URLS := \
 	https://www.youtube.com/watch?v=aqz-KE-bpKQ \
 	https://www.youtube.com/watch?v=L_uXZEkhlZU
+
+GH := https://github.com/
+YTDLP_BASE_URL	:= $(GH)yt-dlp/yt-dlp/releases/latest/download/
+DENO_BASE_URL	:= $(GH)denoland/deno/releases/latest/download/
+DENO_ARCH 		:= $(shell uname -m | sed 's/arm64/aarch64/')
+MAGICK_STEM		:= ImageMagick/ImageMagick/releases/
+MAGICK_TYPE		:= -portable-Q8-
 
 .PHONY: init run test test-app test-videos lint format clean help deploy
 
@@ -101,15 +108,9 @@ INSTALL_PATH	:= /Applications/Instagiffer.app
 DIST_ARTIFACT	:= dist/Instagiffer-$(VERSION).dmg
 MAGICK_OUT		:= build/imagemagick/out
 FFMPEG_OUT		:= build/ffmpeg/out
-YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_macos
+YTDLP_URL		:= $(YTDLP_BASE_URL)yt-dlp_macos
 YTDLP			:= deps/mac/yt-dlp
-DENO_ARCH 		:= $(shell uname -m | sed 's/arm64/aarch64/')
-DENO_URL 		:= https://github.com/denoland/deno/releases/latest/download/deno-${DENO_ARCH}-apple-darwin.zip
-# ifeq (${shell uname -m},arm64)
-# DENO_URL := https://github.com/denoland/deno/releases/latest/download/deno-aarch64-apple-darwin.zip
-# else
-# DENO_URL := https://github.com/denoland/deno/releases/latest/download/deno-x86_64-apple-darwin.zip
-# endif
+DENO_URL 		:= $(DENO_BASE_URL)deno-$(DENO_ARCH)-apple-darwin.zip
 
 deps: $(DEPS_STAMP)
 $(DEPS_STAMP): $(VENV_STAMP)
@@ -165,11 +166,11 @@ DIST_ARTIFACT	:= dist/instagiffer-$(VERSION)-setup.exe
 ISCC			:= ISCC.exe
 SEVENZIP		:= C:/Program Files/7-Zip/7z.exe
 MAGICK_BINS		:= https://imagemagick.org/archive/binaries/
-MAGICK_TYPE		:= -portable-Q8-x64.7z
+MAGICK_TYPE		:= $(MAGICK_TYPE)x64.7z
 MAGICK_VER		:= $(shell curl -fsSL $(MAGICK_BINS) | grep -oP 'ImageMagick-\K[\d.]+-\d+(?=$(MAGICK_TYPE))' | sort -V | tail -1)
 MAGICK_URL		:= $(MAGICK_BINS)ImageMagick-$(MAGICK_VER)$(MAGICK_TYPE)
 FFMPEG_URL		:= https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip
-YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe
+YTDLP_URL		:= $(YTDLP_BASE_URL)yt-dlp.exe
 YTDLP			:= deps/win/yt-dlp.exe
 GIFSICLE_URL	:= https://eternallybored.org/misc/gifsicle/releases/gifsicle-1.95-win64.zip
 INSTALL_STAMP	:= build/.install-stamp
@@ -226,10 +227,13 @@ else ifeq ($(PLATFORM),linux)
 
 DEPS_DIR		:= deps/linux
 APP_PATH		:= dist/Instagiffer/
-MAGICK_URL		:= https://imagemagick.org/archive/binaries/magick
-FFMPEG_URL		:= https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz
+MAGICK_VERSION	:= $(shell curl -s https://api.github.com/repos/$(MAGICK_STEM)latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+MAGICK_FILE		:= ImageMagick-$(MAGICK_VERSION)$(MAGICK_TYPE)linux-x64.tar.xz
+MAGICK_URL		:= $(GH)$(MAGICK_STEM)download/$(MAGICK_VERSION)/$(MAGICK_FILE)
+FFMPEG_URL		:= $(GH)BtbN/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz
 FFMPEG_TMP		:= $(DEPS_DIR)/ffmpeg.tar.xz
-YTDLP_URL		:= https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux
+YTDLP_URL		:= $(YTDLP_BASE_URL)yt-dlp_linux
+DENO_URL		:= $(DENO_BASE_URL)deno-$(DENO_ARCH)-unknown-linux-gnu.zip
 
 INSTALL_PATH	:= /opt/instagiffer
 # If we're running from a Windows-mounted path (WSL), build the .deb in /tmp
@@ -247,20 +251,24 @@ DEB_COMPRESS	?= gzip # override with: make dist DEB_COMPRESS=xz
 
 deps: $(DEPS_STAMP)
 $(DEPS_STAMP): $(VENV_STAMP)
+	@echo "= Linux dependencies checking ======================"
+	@echo "== Getting Python requirements ..."
 	$(PIP) install -e ".[build-linux]"
 	@mkdir -p $(DEPS_DIR) build
 	@[ -f $(DEPS_DIR)/magick ] || ( \
-		echo "Downloading ImageMagick from $(MAGICK_URL) ..." && \
-		curl -fSL -o $(DEPS_DIR)/magick "$(MAGICK_URL)" && \
+		echo "\n== Downloading ImageMagick from $(MAGICK_URL) ..." && \
+		curl -fSL -o $(DEPS_DIR)/$(MAGICK_FILE) "$(MAGICK_URL)" && \
+		tar -xf $(DEPS_DIR)/$(MAGICK_FILE) -C $(DEPS_DIR)/ --strip-components=2 --wildcards "*/bin/magick" && \
+		rm $(DEPS_DIR)/$(MAGICK_FILE) && \
 		chmod +x $(DEPS_DIR)/magick )
 	@[ -f $(DEPS_DIR)/ffmpeg ] || ( \
-		echo "Downloading ffmpeg from $(FFMPEG_URL) ..." && \
+		echo "\n== Downloading ffmpeg from $(FFMPEG_URL) ..." && \
 		curl -fSL -o $(FFMPEG_TMP) "$(FFMPEG_URL)" && \
 		tar -xf $(FFMPEG_TMP) -C $(DEPS_DIR)/ --strip-components=2 --wildcards "*/bin/ffmpeg" && \
 		rm $(FFMPEG_TMP) && \
 		chmod +x $(DEPS_DIR)/ffmpeg )
 	@[ -f $(DEPS_DIR)/yt-dlp ] || ( \
-		echo "Downloading yt-dlp from $(YTDLP_URL) ..." && \
+		echo "\n== Downloading yt-dlp from $(YTDLP_URL) ..." && \
 		curl -fSL -o $(DEPS_DIR)/yt-dlp "$(YTDLP_URL)" && \
 		chmod +x $(DEPS_DIR)/yt-dlp )
 # 	lets ignore gifsicle for now
