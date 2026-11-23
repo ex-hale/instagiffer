@@ -16,21 +16,21 @@ PROJECT_DIR = SOURCE_DIR.parent
 DEPS_ROOT = PROJECT_DIR / 'deps'
 ASSETS_DIR = PROJECT_DIR / 'assets'
 
-if IM_A_LINUX:
-    DEPS_DIR = DEPS_ROOT / 'linux'
-    _APP_DATA_ROOT = Path.home() / '.local' / 'share'
-    _CACHE_ROOT = Path.home() / '.cache'
-elif IM_A_MAC:
-    DEPS_DIR = DEPS_ROOT / 'mac'
-    _APP_DATA_ROOT = Path.home() / '.local' / 'share'
-    _CACHE_ROOT = Path.home() / '.cache'
-elif IM_A_WIN:
-    DEPS_DIR = DEPS_ROOT / 'win'
+if IM_A_WIN:
+    OS_NAME = 'win'
     _APP_DATA_ROOT = Path(os.environ.get('LOCALAPPDATA', Path.home() / 'AppData' / 'Local'))
     _CACHE_ROOT = _APP_DATA_ROOT
+elif IM_A_LINUX or IM_A_MAC:
+    _APP_DATA_ROOT = Path.home() / '.local' / 'share'
+    _CACHE_ROOT = Path.home() / '.cache'
+    if IM_A_LINUX:
+        OS_NAME = 'linux'
+    elif IM_A_MAC:
+        OS_NAME = 'mac'
 else:
     raise RuntimeError(f'Unsupported system "{sys.platform}"?!?!')
 
+DEPS_DIR = DEPS_ROOT / OS_NAME
 APP_DATA_DIR = _APP_DATA_ROOT / 'instagiffer'
 PROJECTS_DIR = APP_DATA_DIR / 'projects'
 USER_DEFAULTS_DIR = APP_DATA_DIR / 'defaults'
