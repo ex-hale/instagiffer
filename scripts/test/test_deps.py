@@ -15,7 +15,7 @@ if str(SCRIPTS_DIR) not in sys.path:
 
 import instagiffer.common  # noqa: E402
 
-from . import check_deps  # noqa: E402
+from . import check_deps  # noqa: E402  # ty: ignore[missing-module-member]
 
 DEPS_ROOT = instagiffer.common.DEPS_ROOT
 
@@ -32,7 +32,7 @@ def test_linux():
         with open(TEST_DATA / 'linux_ffmpeg.tar.xz', 'rb') as file_object:
             return io.BytesIO(file_object.read())
 
-    check_deps.read_into_buffer = read_buffer_mock  # ty:ignore[invalid-assignment]
+    check_deps.read_into_buffer = read_buffer_mock
 
     _package_check(name)
 
@@ -49,7 +49,7 @@ def test_windows():
         with open(TEST_DATA / 'win_ffmpeg.zip', 'rb') as file_object:
             return io.BytesIO(file_object.read())
 
-    check_deps.read_into_buffer = read_buffer_mock  # ty:ignore[invalid-assignment]
+    check_deps.read_into_buffer = read_buffer_mock
 
     _package_check(name)
 
@@ -70,7 +70,7 @@ def test_mac():
         with open(TEST_DATA / file_name, 'rb') as file_object:
             return io.BytesIO(file_object.read())
 
-    check_deps.read_into_buffer = read_buffer_mock  # ty:ignore[invalid-assignment]
+    check_deps.read_into_buffer = read_buffer_mock
 
     _package_check(name)
 
