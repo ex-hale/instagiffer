@@ -7,7 +7,6 @@ import tarfile
 import urllib.request
 import zipfile
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 
 from instagiffer.common import CHECK, DEPS_DIR, EX, IM_A_LINUX, IM_A_MAC, IM_A_WIN, OS_NAME
@@ -20,11 +19,15 @@ _CHUNK_SIZE = 8192
 
 def main() -> None:
     print(f'Checking dependencies: {DEPS_DIR.name} ...')
-    if all(dep.check() for dep in (FFmpeg, Qt, Deno)):
+    dependencies = (
+        FFmpeg,
+        Qt,
+        Deno,
+    )
+    if all(dep.check() for dep in dependencies):
         print(f'{CHECK} all dependencies checked!')
 
 
-@dataclass
 class _Dependency:
     name = ''
     base_url: str = ''
@@ -164,10 +167,10 @@ class Qt(_Dependency):
 
 
 class Deno(_Dependency):
-    name = 'deno'
+    name = 'Deno'
     base_url = 'https://github.com/denoland/deno/releases/latest/download/'
     _arch = 'x86_64' if platform.processor() != 'arm64' else 'aarch64'
-    file_names = (name,)
+    file_names = (name.lower(),)
 
     @classmethod
     def _check(cls) -> bool:
@@ -206,46 +209,6 @@ class DownloadCB:
         self._progress.update(self._task, completed=current)
         if total != -1 and current >= total:
             self._progress.stop()
-
-
-def read_raw(url: str, progress_callback: Callable | None = None, size: int | None = None) -> bytes:
-    """Fetch the contents of a URL and return them as raw bytes.
-
-    Downloads the response in chunks of :data:`_CHUNK_SIZE` bytes, calling
-    ``progress_callback(current, total)`` after each chunk. If ``total`` is
-    unknown the server did not send a ``Content-Length`` header and ``total``
-    will be ``-1``.
-
-    :param url: The URL to fetch.
-    :param progress_callback: Optional callable receiving (current: int, total: int) byte counts
-        as the download progresses. Falls back to debug logging if not provided.
-    :param size: If given, read only this many bytes from the response instead
-        of consuming the full body. Must be an :class:`int`.
-    :return: The raw response body as bytes.
-    :raises RuntimeError: If ``size`` is provided but is not an :class:`int`.
-    :raises urllib.error.URLError: If the URL cannot be reached.
-    """
-    if progress_callback is None:
-        progress_callback = DownloadCB().callback
-    request = urllib.request.Request(url, headers=_HEADERS)
-    with urllib.request.urlopen(request) as response:
-        total = int(response.headers.get('Content-Length', -1))
-        if size is not None:
-            if not isinstance(size, int):
-                raise RuntimeError('Value `size` needs to be Integer!')
-            return response.read(size)
-
-        chunks = []
-        current = 0
-        while True:
-            chunk = response.read(_CHUNK_SIZE)
-            if not chunk:
-                break
-            chunks.append(chunk)
-            current += len(chunk)
-            progress_callback(current, total)
-
-        return b''.join(chunks)
 
 
 def read_into_buffer(url: str, progress_callback: Callable | None = None) -> io.BytesIO:
